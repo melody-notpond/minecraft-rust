@@ -132,12 +132,14 @@ impl Camera {
         let up = &[0.0, 1.0, 0.0f32];
 
         let f = self.direction;
-
         let s = [
             up[1] * f[2] - up[2] * f[1],
             up[2] * f[0] - up[0] * f[2],
             up[0] * f[1] - up[1] * f[0],
         ];
+        let len = s[0] * s[0] + s[1] * s[1] + s[2] * s[2];
+        let len = len.sqrt();
+        let s = [s[0] / len, s[1] / len, s[2] / len];
 
         let u = [
             f[1] * s[2] - f[2] * s[1],

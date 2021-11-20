@@ -45,7 +45,7 @@ fn main() {
         ..Default::default()
     };
 
-    let mut camera = Camera::new(10.0, 0.01, 100.0);
+    let mut camera = Camera::new(10.0, 0.01, 90.0);
     let mut chunk = Chunk::new(0, 0, 0);
 
     let mut last = Instant::now();
