@@ -1,6 +1,9 @@
 use std::time::Duration;
 
-use glium::{Frame, Surface, glutin::event::{ElementState, KeyboardInput, VirtualKeyCode}};
+use glium::{
+    glutin::event::{ElementState, KeyboardInput, VirtualKeyCode},
+    Frame, Surface,
+};
 
 #[derive(Clone, Debug)]
 pub struct Camera {
@@ -27,41 +30,55 @@ impl Camera {
     }
 
     pub fn tick(&mut self, delta: Duration) {
-        self.position[0] += (self.velocity[0] * self.direction[0] + self.velocity[2] * self.direction[2]) * delta.as_secs_f32() / (1.0 - self.direction[1] * self.direction[1]).sqrt();
+        self.position[0] += (self.velocity[0] * self.direction[0]
+            + self.velocity[2] * self.direction[2])
+            * delta.as_secs_f32()
+            / (1.0 - self.direction[1] * self.direction[1]).sqrt();
         self.position[1] += self.velocity[1] * delta.as_secs_f32();
-        self.position[2] += (self.velocity[0] * self.direction[2] - self.velocity[2] * self.direction[0]) * delta.as_secs_f32() / (1.0 - self.direction[1] * self.direction[1]).sqrt();
+        self.position[2] += (self.velocity[0] * self.direction[2]
+            - self.velocity[2] * self.direction[0])
+            * delta.as_secs_f32()
+            / (1.0 - self.direction[1] * self.direction[1]).sqrt();
     }
 
     pub fn move_self(&mut self, input: KeyboardInput) -> bool {
         let pressed = matches!(input.state, ElementState::Pressed);
-        let mult = if pressed  {
-            1.0
-        } else {
-            -1.0
-        };
+        let mult = if pressed { 1.0 } else { -1.0 };
 
         match input.virtual_keycode {
-            Some(VirtualKeyCode::W) if self.pressed[0] != pressed  => {
+            Some(VirtualKeyCode::W) if self.pressed[0] != pressed => {
                 self.velocity[0] += self.speed * mult;
                 self.pressed[0] = pressed;
                 true
             }
 
-            Some(VirtualKeyCode::S) if self.pressed[1] != pressed  => {
+            Some(VirtualKeyCode::S) if self.pressed[1] != pressed => {
                 self.velocity[0] -= self.speed * mult;
                 self.pressed[1] = pressed;
                 true
             }
 
-            Some(VirtualKeyCode::A) if self.pressed[2] != pressed  => {
+            Some(VirtualKeyCode::A) if self.pressed[2] != pressed => {
                 self.velocity[2] -= self.speed * mult;
                 self.pressed[2] = pressed;
                 true
             }
 
-            Some(VirtualKeyCode::D) if self.pressed[3] != pressed  => {
+            Some(VirtualKeyCode::D) if self.pressed[3] != pressed => {
                 self.velocity[2] += self.speed * mult;
                 self.pressed[3] = pressed;
+                true
+            }
+
+            Some(VirtualKeyCode::Space) if self.pressed[4] != pressed => {
+                self.velocity[1] += self.speed * mult;
+                self.pressed[4] = pressed;
+                true
+            }
+
+            Some(VirtualKeyCode::LShift) if self.pressed[5] != pressed => {
+                self.velocity[1] -= self.speed * mult;
+                self.pressed[5] = pressed;
                 true
             }
 
@@ -79,7 +96,10 @@ impl Camera {
         self.direction[0] = old_x * dx.cos() + old_z * dx.sin();
         self.direction[2] = old_z * dx.cos() - old_x * dx.sin();
 
-        if dy.abs() > f32::EPSILON && !((self.direction[1] > 0.999 && dy < 0.0) || (self.direction[1] < -0.999 && dy > 0.0)) {
+        if dy.abs() > f32::EPSILON
+            && !((self.direction[1] > 0.999 && dy < 0.0)
+                || (self.direction[1] < -0.999 && dy > 0.0))
+        {
             let old_factor = (1.0 - self.direction[1] * self.direction[1]).sqrt();
             self.direction[0] /= old_factor;
             self.direction[2] /= old_factor;
@@ -113,17 +133,23 @@ impl Camera {
 
         let f = self.direction;
 
-        let s = [up[1] * f[2] - up[2] * f[1],
-                 up[2] * f[0] - up[0] * f[2],
-                 up[0] * f[1] - up[1] * f[0]];
+        let s = [
+            up[1] * f[2] - up[2] * f[1],
+            up[2] * f[0] - up[0] * f[2],
+            up[0] * f[1] - up[1] * f[0],
+        ];
 
-        let u = [f[1] * s[2] - f[2] * s[1],
-                 f[2] * s[0] - f[0] * s[2],
-                 f[0] * s[1] - f[1] * s[0]];
+        let u = [
+            f[1] * s[2] - f[2] * s[1],
+            f[2] * s[0] - f[0] * s[2],
+            f[0] * s[1] - f[1] * s[0],
+        ];
 
-        let p = [-self.position[0] * s[0] - self.position[1] * s[1] - self.position[2] * s[2],
-                 -self.position[0] * u[0] - self.position[1] * u[1] - self.position[2] * u[2],
-                 -self.position[0] * f[0] - self.position[1] * f[1] - self.position[2] * f[2]];
+        let p = [
+            -self.position[0] * s[0] - self.position[1] * s[1] - self.position[2] * s[2],
+            -self.position[0] * u[0] - self.position[1] * u[1] - self.position[2] * u[2],
+            -self.position[0] * f[0] - self.position[1] * f[1] - self.position[2] * f[2],
+        ];
 
         [
             [s[0], u[0], f[0], 0.0],
@@ -133,4 +159,3 @@ impl Camera {
         ]
     }
 }
-

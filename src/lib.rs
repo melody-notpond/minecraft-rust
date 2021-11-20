@@ -2,5 +2,5 @@
 extern crate glium;
 
 pub mod camera;
+pub mod cube;
 pub mod shapes;
-pub mod teapot;
