@@ -8,7 +8,8 @@ use glium::{Display, Program, Surface};
 use glium::glutin::{event::{Event, StartCause, WindowEvent}, event_loop::{ControlFlow, EventLoop}, window::WindowBuilder, ContextBuilder};
 
 use minecraft_rust::camera::Camera;
-use minecraft_rust::teapot;
+use minecraft_rust::shapes::{Normal, Position, TexCoord};
+use tobj::{LoadOptions, Mesh};
 
 const VERTEX_SHADER: &str = include_str!("shaders/vertex.glsl");
 const FRAGMENT_SHADER: &str = include_str!("shaders/fragment.glsl");
@@ -42,9 +43,18 @@ fn main() {
         ..Default::default()
     };
 
-    let positions = glium::VertexBuffer::new(&display, &teapot::VERTICES).unwrap();
-    let normals = glium::VertexBuffer::new(&display, &teapot::NORMALS).unwrap();
-    let indices = glium::IndexBuffer::new(&display, glium::index::PrimitiveType::TrianglesList, &teapot::INDICES).unwrap();
+    let Mesh { positions, normals, texcoords, indices, .. } = tobj::load_obj("cube.obj", &LoadOptions {
+        single_index: true,
+        triangulate: true,
+        ..Default::default()
+    }).unwrap().0.swap_remove(0).mesh;
+
+    let positions = glium::VertexBuffer::new(&display, &positions.chunks(3).map(|v| Position { position: [v[0], v[1], v[2]] }).collect::<Vec<_>>()).unwrap();
+    let tex_coords = glium::VertexBuffer::new(&display, &texcoords.chunks(2).map(|v| TexCoord { tex_coords: [v[0], v[1]] }).collect::<Vec<_>>()).unwrap();
+    let normals = glium::VertexBuffer::new(&display, &normals.chunks(3).map(|v| Normal { normal: [v[0], v[1], v[2]] }).collect::<Vec<_>>()).unwrap();
+
+    let indices = glium::IndexBuffer::new(&display, glium::index::PrimitiveType::TrianglesList, &indices).unwrap();
+
     let mut camera = Camera::new(1.0, 0.01, 100.0);
     let mut last = Instant::now();
 
@@ -100,9 +110,9 @@ fn main() {
         let perspective = camera.perspective(&target);
 
         let model = [
-            [0.1, 0.0, 0.0, 0.0],
-            [0.0, 0.1, 0.0, 0.0],
-            [0.0, 0.0, 0.1, 0.0],
+            [1.0, 0.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0, 0.0],
             [0.0, 0.0, 1.5, 1.0f32],
         ];
         let view = camera.view_matrix();
@@ -113,7 +123,7 @@ fn main() {
             light: [-1.0, 0.4, 0.9f32],
         };
 
-        target.draw((&positions, &normals), &indices, &program, &uniforms, &params).unwrap();
+        target.draw((&positions, &tex_coords, &normals), &indices, &program, &uniforms, &params).unwrap();
         target.finish().unwrap();
 
         last = Instant::now();
