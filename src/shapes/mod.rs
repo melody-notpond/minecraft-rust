@@ -1,3 +1,5 @@
+pub mod cube;
+
 #[derive(Copy, Clone, Debug)]
 pub struct Position {
     pub position: [f32; 3],

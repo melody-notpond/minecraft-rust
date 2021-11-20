@@ -1,4 +1,3 @@
-#[macro_use]
 extern crate glium;
 
 use std::time::{Duration, Instant};
@@ -13,8 +12,7 @@ use glium::glutin::{
 use glium::{Display, Program, Surface};
 
 use minecraft_rust::camera::Camera;
-use minecraft_rust::cube;
-use minecraft_rust::shapes::{Normal, Position, TexCoord};
+use minecraft_rust::chunk::Chunk;
 
 const VERTEX_SHADER: &str = include_str!("shaders/vertex.glsl");
 const FRAGMENT_SHADER: &str = include_str!("shaders/fragment.glsl");
@@ -43,24 +41,14 @@ fn main() {
             write: true,
             ..Default::default()
         },
-        //backface_culling: glium::draw_parameters::BackfaceCullingMode::CullClockwise,
+        backface_culling: glium::draw_parameters::BackfaceCullingMode::CullCounterClockwise,
         ..Default::default()
     };
 
-    let positions = glium::VertexBuffer::new(&display, &cube::POSITIONS).unwrap();
-    let tex_coords = glium::VertexBuffer::new(&display, &cube::TEX_COORDS).unwrap();
-    let normals = glium::VertexBuffer::new(&display, &cube::NORMALS).unwrap();
+    let mut camera = Camera::new(10.0, 0.01, 100.0);
+    let chunk = Chunk::new(&display, 0, 0, 0);
 
-    let indices = glium::IndexBuffer::new(
-        &display,
-        glium::index::PrimitiveType::TrianglesList,
-        &cube::INDICES,
-    )
-    .unwrap();
-
-    let mut camera = Camera::new(1.0, 0.01, 100.0);
     let mut last = Instant::now();
-
     event_loop.run(move |event, _, control_flow| {
         match event {
             Event::WindowEvent { event, .. } => {
@@ -113,29 +101,10 @@ fn main() {
 
         let perspective = camera.perspective(&target);
 
-        let model = [
-            [1.0, 0.0, 0.0, 0.0],
-            [0.0, 1.0, 0.0, 0.0],
-            [0.0, 0.0, 1.0, 0.0],
-            [0.0, 0.0, -4.0, 1.0f32],
-        ];
         let view = camera.view_matrix();
-        let uniforms = uniform! {
-            model: model,
-            view: view,
-            perspective: perspective,
-            light: [-1.0, 0.4, 0.9f32],
-        };
 
-        target
-            .draw(
-                (&positions, &tex_coords, &normals),
-                &indices,
-                &program,
-                &uniforms,
-                &params,
-            )
-            .unwrap();
+        chunk.render(&mut target, &program, perspective, view, &params);
+
         target.finish().unwrap();
 
         last = Instant::now();
