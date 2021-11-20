@@ -41,12 +41,12 @@ fn main() {
             write: true,
             ..Default::default()
         },
-        backface_culling: glium::draw_parameters::BackfaceCullingMode::CullCounterClockwise,
+        backface_culling: glium::draw_parameters::BackfaceCullingMode::CullClockwise,
         ..Default::default()
     };
 
     let mut camera = Camera::new(10.0, 0.01, 100.0);
-    let chunk = Chunk::new(&display, 0, 0, 0);
+    let mut chunk = Chunk::new(0, 0, 0);
 
     let mut last = Instant::now();
     event_loop.run(move |event, _, control_flow| {
@@ -103,6 +103,7 @@ fn main() {
 
         let view = camera.view_matrix();
 
+        chunk.generate_mesh(&display);
         chunk.render(&mut target, &program, perspective, view, &params);
 
         target.finish().unwrap();
