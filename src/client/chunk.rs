@@ -1,6 +1,6 @@
 use glium::{Display, DrawParameters, Frame, IndexBuffer, Program, Surface, VertexBuffer};
 
-use crate::shapes::{Normal, Position, TexCoord};
+use super::shapes::{Normal, Position, TexCoord};
 
 pub const CHUNK_SIZE: usize = 16;
 
@@ -35,7 +35,7 @@ const NORM_RIGHT: Normal = Normal {
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Block {
     Air,
-    Solid
+    Solid,
 }
 
 #[derive(Debug)]
@@ -92,7 +92,9 @@ impl Chunk {
         for x in 0..CHUNK_SIZE {
             for y in 0..CHUNK_SIZE {
                 for z in 0..CHUNK_SIZE {
-                    if self.blocks[x][y][z] == Block::Solid && (y == CHUNK_SIZE - 1 || self.blocks[x][y + 1][z] == Block::Air) {
+                    if self.blocks[x][y][z] == Block::Solid
+                        && (y == CHUNK_SIZE - 1 || self.blocks[x][y + 1][z] == Block::Air)
+                    {
                         let i = positions.len() as u32;
                         positions.push(Position {
                             position: [x as f32, y as f32 + 1.0, z as f32],
@@ -125,7 +127,9 @@ impl Chunk {
                         indices.push(i + 3);
                     }
 
-                    if self.blocks[x][y][z] == Block::Solid && (y == 0 || self.blocks[x][y - 1][z] == Block::Air) {
+                    if self.blocks[x][y][z] == Block::Solid
+                        && (y == 0 || self.blocks[x][y - 1][z] == Block::Air)
+                    {
                         let i = positions.len() as u32;
                         positions.push(Position {
                             position: [x as f32, y as f32, z as f32],
@@ -158,7 +162,9 @@ impl Chunk {
                         indices.push(i + 2);
                     }
 
-                    if self.blocks[x][y][z] == Block::Solid && (x == CHUNK_SIZE - 1 || self.blocks[x + 1][y][z] == Block::Air) {
+                    if self.blocks[x][y][z] == Block::Solid
+                        && (x == CHUNK_SIZE - 1 || self.blocks[x + 1][y][z] == Block::Air)
+                    {
                         let i = positions.len() as u32;
                         positions.push(Position {
                             position: [x as f32 + 1.0, y as f32, z as f32],
@@ -191,7 +197,9 @@ impl Chunk {
                         indices.push(i + 2);
                     }
 
-                    if self.blocks[x][y][z] == Block::Solid && (x == 0 || self.blocks[x - 1][y][z] == Block::Air) {
+                    if self.blocks[x][y][z] == Block::Solid
+                        && (x == 0 || self.blocks[x - 1][y][z] == Block::Air)
+                    {
                         let i = positions.len() as u32;
                         positions.push(Position {
                             position: [x as f32, y as f32, z as f32],
@@ -224,7 +232,9 @@ impl Chunk {
                         indices.push(i + 3);
                     }
 
-                    if self.blocks[x][y][z] == Block::Solid && (z == CHUNK_SIZE - 1 || self.blocks[x][y][z + 1] == Block::Air) {
+                    if self.blocks[x][y][z] == Block::Solid
+                        && (z == CHUNK_SIZE - 1 || self.blocks[x][y][z + 1] == Block::Air)
+                    {
                         let i = positions.len() as u32;
                         positions.push(Position {
                             position: [x as f32, y as f32, z as f32 + 1.0],
@@ -257,7 +267,9 @@ impl Chunk {
                         indices.push(i + 2);
                     }
 
-                    if self.blocks[x][y][z] == Block::Solid && (z == 0 || self.blocks[x][y][z - 1] == Block::Air) {
+                    if self.blocks[x][y][z] == Block::Solid
+                        && (z == 0 || self.blocks[x][y][z - 1] == Block::Air)
+                    {
                         let i = positions.len() as u32;
                         positions.push(Position {
                             position: [x as f32, y as f32, z as f32],
@@ -297,11 +309,11 @@ impl Chunk {
         let tex_coords = VertexBuffer::new(display, &tex_coords).unwrap();
         let normals = VertexBuffer::new(display, &normals).unwrap();
         let indices = IndexBuffer::new(
-                display,
-                glium::index::PrimitiveType::TrianglesList,
-                &indices,
-            )
-            .unwrap();
+            display,
+            glium::index::PrimitiveType::TrianglesList,
+            &indices,
+        )
+        .unwrap();
 
         self.mesh = Some(Mesh {
             positions,
@@ -311,13 +323,25 @@ impl Chunk {
         });
     }
 
-    pub fn render(&self, target: &mut Frame, program: &Program, perspective: [[f32; 4]; 4], view: [[f32; 4]; 4], params: &DrawParameters) {
+    pub fn render(
+        &self,
+        target: &mut Frame,
+        program: &Program,
+        perspective: [[f32; 4]; 4],
+        view: [[f32; 4]; 4],
+        params: &DrawParameters,
+    ) {
         if let Some(mesh) = &self.mesh {
             let model = [
                 [1.0, 0.0, 0.0, 0.0],
                 [0.0, 1.0, 0.0, 0.0],
                 [0.0, 0.0, 1.0, 0.0],
-                [(self.chunk_x * CHUNK_SIZE as i32) as f32, (self.chunk_y * CHUNK_SIZE as i32) as f32, (self.chunk_z * CHUNK_SIZE as i32) as f32, 1.0],
+                [
+                    (self.chunk_x * CHUNK_SIZE as i32) as f32,
+                    (self.chunk_y * CHUNK_SIZE as i32) as f32,
+                    (self.chunk_z * CHUNK_SIZE as i32) as f32,
+                    1.0,
+                ],
             ];
 
             let uniforms = uniform! {

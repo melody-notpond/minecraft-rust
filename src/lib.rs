@@ -1,6 +1,11 @@
 #[macro_use]
+#[cfg(feature = "glium")]
 extern crate glium;
 
-pub mod camera;
-pub mod chunk;
-pub mod shapes;
+#[cfg(feature = "client")]
+pub mod client;
+
+#[cfg(feature = "server")]
+pub mod server;
+
+pub mod packet;

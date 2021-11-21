@@ -1,5 +1,3 @@
-extern crate glium;
-
 use std::time::{Duration, Instant};
 
 use glium::glutin::dpi::PhysicalPosition;
@@ -11,11 +9,11 @@ use glium::glutin::{
 };
 use glium::{Display, Program, Surface};
 
-use minecraft_rust::camera::Camera;
-use minecraft_rust::chunk::Chunk;
+use minecraft_rust::client::camera::Camera;
+use minecraft_rust::client::chunk::Chunk;
 
-const VERTEX_SHADER: &str = include_str!("shaders/vertex.glsl");
-const FRAGMENT_SHADER: &str = include_str!("shaders/fragment.glsl");
+const VERTEX_SHADER: &str = include_str!("../shaders/vertex.glsl");
+const FRAGMENT_SHADER: &str = include_str!("../shaders/fragment.glsl");
 
 fn main() {
     let event_loop = EventLoop::new();
