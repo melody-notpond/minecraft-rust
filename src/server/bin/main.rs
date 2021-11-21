@@ -24,8 +24,8 @@ async fn main() -> io::Result<()> {
                 sock.send_to(&buf, addr).await?;
             }
 
-            UserPacket::Ping => {
-                let buf = bincode::serialize(&ServerPacket::Pong).unwrap();
+            UserPacket::Ping { timestamp } => {
+                let buf = bincode::serialize(&ServerPacket::Pong { timestamp }).unwrap();
                 println!("Ping! ({})", addr);
                 sock.send_to(&buf, addr).await?;
             }

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use glium::glutin::dpi::PhysicalPosition;
 use glium::glutin::{
@@ -149,22 +149,31 @@ async fn receiving(tx: mpsc::Sender<UserPacket>, sock: Arc<UdpSocket>) -> std::i
     loop {
         let len = sock.recv(&mut *buf).await?;
         let packet: ServerPacket = bincode::deserialize(&buf[..len]).unwrap();
-        println!("{:?}", packet);
 
         match packet {
             ServerPacket::ConnectionAccepted => {
                 println!("Connected to server!");
-                tx.send(UserPacket::Ping).await.unwrap();
+                tokio::spawn(ping(tx.clone()));
             }
 
             ServerPacket::Disconnected { .. } => {
                 println!("Disconnected");
             }
 
-            ServerPacket::Pong => {
-                println!("Pong!");
-                tx.send(UserPacket::Ping).await.unwrap();
+            ServerPacket::Pong { timestamp } => {
+                let now = SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+                let duration = now - timestamp;
+                let duration = Duration::from_nanos(duration as u64);
+                println!("Pong! {:?}", duration);
             }
         }
+    }
+}
+
+async fn ping(tx: mpsc::Sender<UserPacket>) {
+    loop {
+        let timestamp = SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        tx.send(UserPacket::Ping{ timestamp }).await.unwrap();
+        tokio::time::sleep(Duration::from_secs(1)).await;
     }
 }

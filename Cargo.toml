@@ -26,5 +26,5 @@ image = { version = "*", optional = true }
 serde = { version = "*", features = ["derive"] }
 bincode = "*"
 tobj = { version = "*", optional = true }
-tokio = { version = "*", features = ["rt", "net", "macros", "rt-multi-thread", "sync"] }
+tokio = { version = "*", features = ["rt", "net", "macros", "rt-multi-thread", "sync", "time"] }
 rand = "*"
