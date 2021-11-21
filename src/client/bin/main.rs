@@ -1,3 +1,5 @@
+use std::sync::Arc;
+use std::thread;
 use std::time::{Duration, Instant};
 
 use glium::glutin::dpi::PhysicalPosition;
@@ -8,14 +10,23 @@ use glium::glutin::{
     ContextBuilder,
 };
 use glium::{Display, Program, Surface};
+use tokio::net::UdpSocket;
+use tokio::sync::mpsc;
 
 use minecraft_rust::client::camera::Camera;
 use minecraft_rust::client::chunk::Chunk;
+use minecraft_rust::packet::{ServerPacket, UserPacket};
 
 const VERTEX_SHADER: &str = include_str!("../shaders/vertex.glsl");
 const FRAGMENT_SHADER: &str = include_str!("../shaders/fragment.glsl");
 
-fn main() {
+fn main() -> std::io::Result<()> {
+    thread::spawn(networking_loop);
+    gui();
+    Ok(())
+}
+
+fn gui() {
     let event_loop = EventLoop::new();
     let wb = WindowBuilder::new();
     let cb = ContextBuilder::new().with_depth_buffer(24);
@@ -110,4 +121,50 @@ fn main() {
         let next_frame_time = last + Duration::from_nanos(16_666_667);
         *control_flow = ControlFlow::WaitUntil(next_frame_time);
     });
+}
+
+#[tokio::main]
+async fn networking_loop() -> std::io::Result<()> {
+    let sock = Arc::new(UdpSocket::bind("0.0.0.0:4269").await?);
+    sock.connect("127.0.0.1:6942").await?;
+
+    let (tx, rx) = mpsc::channel(128);
+
+    tokio::spawn(transmitting(rx, sock.clone()));
+    receiving(tx, sock).await
+}
+
+async fn transmitting(mut rx: mpsc::Receiver<UserPacket>, sock: Arc<UdpSocket>) -> std::io::Result<()> {
+    sock.send(&bincode::serialize(&UserPacket::ConnectionRequest { name: String::from("uwu"), }).unwrap()).await.unwrap();
+    while let Some(packet) = rx.recv().await {
+        sock.send(&bincode::serialize(&packet).unwrap()).await?;
+    }
+
+    Ok(())
+}
+
+async fn receiving(tx: mpsc::Sender<UserPacket>, sock: Arc<UdpSocket>) -> std::io::Result<()> {
+    let mut buf = Box::new([0; 1024]);
+
+    loop {
+        let len = sock.recv(&mut *buf).await?;
+        let packet: ServerPacket = bincode::deserialize(&buf[..len]).unwrap();
+        println!("{:?}", packet);
+
+        match packet {
+            ServerPacket::ConnectionAccepted => {
+                println!("Connected to server!");
+                tx.send(UserPacket::Ping).await.unwrap();
+            }
+
+            ServerPacket::Disconnected { .. } => {
+                println!("Disconnected");
+            }
+
+            ServerPacket::Pong => {
+                println!("Pong!");
+                tx.send(UserPacket::Ping).await.unwrap();
+            }
+        }
+    }
 }
