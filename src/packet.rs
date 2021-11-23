@@ -15,5 +15,8 @@ pub enum ServerPacket {
     ConnectionAccepted,
     Disconnected { reason: String, },
     Pong { timestamp: u128 },
+    UserJoin { name: String, pos: [f32; 3] },
+    UserLeave { name: String },
+    MoveUser { name: String, pos: [f32; 3] }
 }
 

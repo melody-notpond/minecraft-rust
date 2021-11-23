@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant, SystemTime};
@@ -11,6 +12,7 @@ use glium::glutin::{
     ContextBuilder,
 };
 use glium::{Display, Program, Surface};
+use minecraft_rust::client::player::Player;
 use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
 
@@ -18,17 +20,21 @@ use minecraft_rust::client::camera::Camera;
 use minecraft_rust::client::chunk::Chunk;
 use minecraft_rust::packet::{ServerPacket, UserPacket};
 
+const USERNAME: &str = "uwu";
+const ADDRESS: &str = "0.0.0.0:4269";
+
 const VERTEX_SHADER: &str = include_str!("../shaders/vertex.glsl");
 const FRAGMENT_SHADER: &str = include_str!("../shaders/fragment.glsl");
 
 fn main() {
-    let (tx, rx) = mpsc::channel(128);
-    let tx2 = tx.clone();
-    thread::spawn(|| networking_loop(tx2, rx));
-    gui(tx);
+    let (send_tx, send_rx) = mpsc::channel(128);
+    let (recv_tx, recv_rx) = mpsc::channel(128);
+    let send_tx2 = send_tx.clone();
+    thread::spawn(|| networking_loop(send_tx2, send_rx, recv_tx));
+    main_loop(send_tx, recv_rx);
 }
 
-fn gui(tx: mpsc::Sender<UserPacket>) {
+fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>) {
     let event_loop = EventLoop::new();
     let wb = WindowBuilder::new();
     let cb = ContextBuilder::new().with_depth_buffer(24);
@@ -59,6 +65,7 @@ fn gui(tx: mpsc::Sender<UserPacket>) {
 
     let mut camera = Camera::new(10.0, 0.01, 90.0);
     let mut chunk = Chunk::new(0, 0, 0);
+    let mut players = HashMap::new();
 
     let mut last = Instant::now();
     event_loop.run(move |event, _, control_flow| {
@@ -68,6 +75,14 @@ fn gui(tx: mpsc::Sender<UserPacket>) {
                     WindowEvent::CloseRequested => {
                         *control_flow = ControlFlow::Exit;
                         tx.blocking_send(UserPacket::Disconnect).unwrap();
+                    }
+
+                    WindowEvent::Focused(false) => {
+                        let gl_window = display.gl_window();
+                        let window = gl_window.window();
+                        window.set_cursor_visible(true);
+                        window.set_cursor_grab(false).unwrap();
+                        locked = false;
                     }
 
                     WindowEvent::KeyboardInput { input, .. } if matches!(input.virtual_keycode, Some(VirtualKeyCode::Escape)) && matches!(input.state, ElementState::Released) => {
@@ -118,6 +133,29 @@ fn gui(tx: mpsc::Sender<UserPacket>) {
         }
 
         let delta = Instant::now() - last;
+
+        while let Some(packet) = rx.try_recv().ok() {
+            match packet {
+                ServerPacket::ConnectionAccepted => (),
+                ServerPacket::Disconnected { .. } => (),
+                ServerPacket::Pong { .. } => (),
+
+                ServerPacket::UserJoin { name, pos } => {
+                    players.insert(name.clone(), Player::new(name, pos, &display));
+                }
+
+                ServerPacket::UserLeave { name } => {
+                    players.remove(&name);
+                }
+
+                ServerPacket::MoveUser { name, pos } => {
+                    if let Some(player) = players.get_mut(&name) {
+                        player.position = pos;
+                    }
+                }
+            }
+        }
+
         camera.tick(delta);
         if camera.is_moving() {
             tx.blocking_send(UserPacket::MoveSelf { pos: camera.get_pos() }).unwrap();
@@ -133,6 +171,10 @@ fn gui(tx: mpsc::Sender<UserPacket>) {
         chunk.generate_mesh(&display);
         chunk.render(&mut target, &program, perspective, view, &params);
 
+        for (_, player) in players.iter() {
+            player.render(&mut target, &program, perspective, view, &params);
+        }
+
         target.finish().unwrap();
 
         last = Instant::now();
@@ -142,16 +184,17 @@ fn gui(tx: mpsc::Sender<UserPacket>) {
 }
 
 #[tokio::main]
-async fn networking_loop(tx: mpsc::Sender<UserPacket>, rx: mpsc::Receiver<UserPacket>) -> std::io::Result<()> {
-    let sock = Arc::new(UdpSocket::bind("0.0.0.0:4269").await.unwrap());
+async fn networking_loop(tx: mpsc::Sender<UserPacket>, rx: mpsc::Receiver<UserPacket>, recv_tx: mpsc::Sender<ServerPacket>) -> std::io::Result<()> {
+    let sock = Arc::new(UdpSocket::bind(ADDRESS).await.unwrap());
     sock.connect("127.0.0.1:6942").await?;
 
     tokio::spawn(transmitting(rx, sock.clone()));
-    receiving(tx, sock).await
+    receiving(tx, sock, recv_tx).await
 }
 
 async fn transmitting(mut rx: mpsc::Receiver<UserPacket>, sock: Arc<UdpSocket>) -> std::io::Result<()> {
-    sock.send(&bincode::serialize(&UserPacket::ConnectionRequest { name: String::from("uwu"), }).unwrap()).await?;
+    sock.send(&bincode::serialize(&UserPacket::ConnectionRequest { name: String::from(USERNAME), }).unwrap()).await?;
+
     while let Some(packet) = rx.recv().await {
         sock.send(&bincode::serialize(&packet).unwrap()).await?;
     }
@@ -159,7 +202,7 @@ async fn transmitting(mut rx: mpsc::Receiver<UserPacket>, sock: Arc<UdpSocket>) 
     Ok(())
 }
 
-async fn receiving(tx: mpsc::Sender<UserPacket>, sock: Arc<UdpSocket>) -> std::io::Result<()> {
+async fn receiving(tx: mpsc::Sender<UserPacket>, sock: Arc<UdpSocket>, recv_tx: mpsc::Sender<ServerPacket>) -> std::io::Result<()> {
     let mut buf = Box::new([0; 1024]);
 
     loop {
@@ -182,6 +225,20 @@ async fn receiving(tx: mpsc::Sender<UserPacket>, sock: Arc<UdpSocket>) -> std::i
                 let duration = now - timestamp;
                 let duration = Duration::from_nanos(duration as u64);
                 println!("Pong! {:?}", duration);
+            }
+
+            ServerPacket::UserJoin { name, pos } => {
+                println!("{} joined the game", name);
+                recv_tx.send(ServerPacket::UserJoin { name, pos }).await.unwrap();
+            }
+
+            ServerPacket::UserLeave { name } => {
+                println!("{} left the game", name);
+                recv_tx.send(ServerPacket::UserLeave { name }).await.unwrap();
+            }
+
+            ServerPacket::MoveUser { name, pos } => {
+                recv_tx.send(ServerPacket::MoveUser { name, pos }).await.unwrap();
             }
         }
     }

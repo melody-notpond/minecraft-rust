@@ -349,6 +349,7 @@ impl Chunk {
                 view: view,
                 perspective: perspective,
                 light: [-1.0, 0.4, 0.9f32],
+                colour: [1.0, 0.0, 0.0f32],
             };
 
             target
