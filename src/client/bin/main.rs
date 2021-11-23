@@ -3,6 +3,7 @@ use std::thread;
 use std::time::{Duration, Instant, SystemTime};
 
 use glium::glutin::dpi::PhysicalPosition;
+use glium::glutin::event::{ElementState, VirtualKeyCode};
 use glium::glutin::{
     event::{Event, StartCause, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
@@ -20,17 +21,19 @@ use minecraft_rust::packet::{ServerPacket, UserPacket};
 const VERTEX_SHADER: &str = include_str!("../shaders/vertex.glsl");
 const FRAGMENT_SHADER: &str = include_str!("../shaders/fragment.glsl");
 
-fn main() -> std::io::Result<()> {
-    thread::spawn(networking_loop);
-    gui();
-    Ok(())
+fn main() {
+    let (tx, rx) = mpsc::channel(128);
+    let tx2 = tx.clone();
+    thread::spawn(|| networking_loop(tx2, rx));
+    gui(tx);
 }
 
-fn gui() {
+fn gui(tx: mpsc::Sender<UserPacket>) {
     let event_loop = EventLoop::new();
     let wb = WindowBuilder::new();
     let cb = ContextBuilder::new().with_depth_buffer(24);
     let display = Display::new(wb, cb, &event_loop).unwrap();
+    let mut locked = true;
 
     {
         let gl_window = display.gl_window();
@@ -64,11 +67,23 @@ fn gui() {
                 match event {
                     WindowEvent::CloseRequested => {
                         *control_flow = ControlFlow::Exit;
+                        tx.blocking_send(UserPacket::Disconnect).unwrap();
                     }
 
-                    WindowEvent::KeyboardInput { input, .. } if camera.move_self(input) => (),
+                    WindowEvent::KeyboardInput { input, .. } if matches!(input.virtual_keycode, Some(VirtualKeyCode::Escape)) && matches!(input.state, ElementState::Released) => {
+                        let gl_window = display.gl_window();
+                        let window = gl_window.window();
+                        let size = window.inner_size();
+                        let centre = PhysicalPosition::new(size.width / 2, size.height / 2);
+                        window.set_cursor_position(centre).unwrap();
+                        window.set_cursor_visible(locked);
+                        locked ^= true;
+                        window.set_cursor_grab(locked).unwrap();
+                    }
 
-                    WindowEvent::CursorMoved { position, .. } => {
+                    WindowEvent::KeyboardInput { input, .. } if locked && camera.move_self(input) => (),
+
+                    WindowEvent::CursorMoved { position, .. } if locked => {
                         let gl_window = display.gl_window();
                         let window = gl_window.window();
                         let size = window.inner_size();
@@ -104,6 +119,9 @@ fn gui() {
 
         let delta = Instant::now() - last;
         camera.tick(delta);
+        if camera.is_moving() {
+            tx.blocking_send(UserPacket::MoveSelf { pos: camera.get_pos() }).unwrap();
+        }
 
         let mut target = display.draw();
         target.clear_color_and_depth((0.0, 1.0, 0.0, 1.0), 1.0);
@@ -124,18 +142,16 @@ fn gui() {
 }
 
 #[tokio::main]
-async fn networking_loop() -> std::io::Result<()> {
-    let sock = Arc::new(UdpSocket::bind("0.0.0.0:4269").await?);
+async fn networking_loop(tx: mpsc::Sender<UserPacket>, rx: mpsc::Receiver<UserPacket>) -> std::io::Result<()> {
+    let sock = Arc::new(UdpSocket::bind("0.0.0.0:4269").await.unwrap());
     sock.connect("127.0.0.1:6942").await?;
-
-    let (tx, rx) = mpsc::channel(128);
 
     tokio::spawn(transmitting(rx, sock.clone()));
     receiving(tx, sock).await
 }
 
 async fn transmitting(mut rx: mpsc::Receiver<UserPacket>, sock: Arc<UdpSocket>) -> std::io::Result<()> {
-    sock.send(&bincode::serialize(&UserPacket::ConnectionRequest { name: String::from("uwu"), }).unwrap()).await.unwrap();
+    sock.send(&bincode::serialize(&UserPacket::ConnectionRequest { name: String::from("uwu"), }).unwrap()).await?;
     while let Some(packet) = rx.recv().await {
         sock.send(&bincode::serialize(&packet).unwrap()).await?;
     }
@@ -156,8 +172,9 @@ async fn receiving(tx: mpsc::Sender<UserPacket>, sock: Arc<UdpSocket>) -> std::i
                 tokio::spawn(ping(tx.clone()));
             }
 
-            ServerPacket::Disconnected { .. } => {
-                println!("Disconnected");
+            ServerPacket::Disconnected { reason } => {
+                println!("Disconnected from server for reason {}", reason);
+                break Ok(());
             }
 
             ServerPacket::Pong { timestamp } => {

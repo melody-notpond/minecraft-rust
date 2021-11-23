@@ -29,6 +29,16 @@ impl Camera {
         }
     }
 
+    pub fn get_pos(&self) -> [f32; 3] {
+        self.position
+    }
+
+    pub fn is_moving(&self) -> bool {
+        self.velocity[0].abs() > f32::EPSILON
+            || self.velocity[1].abs() > f32::EPSILON
+            || self.velocity[2].abs() > f32::EPSILON
+    }
+
     pub fn tick(&mut self, delta: Duration) {
         self.position[0] += (self.velocity[0] * self.direction[0]
             + self.velocity[2] * self.direction[2])

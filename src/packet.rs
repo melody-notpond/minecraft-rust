@@ -4,7 +4,9 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Debug)]
 pub enum UserPacket {
     ConnectionRequest { name: String },
-    Ping { timestamp: u128 }
+    Disconnect,
+    Ping { timestamp: u128 },
+    MoveSelf { pos: [f32; 3] },
 }
 
 /// Packet from server to user

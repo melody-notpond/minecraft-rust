@@ -8,7 +8,7 @@ edition = "2018"
 [features]
 default = ["client", "server"]
 client = ["glium", "image", "tobj"]
-server = []
+server = ["ctrlc"]
 
 [[bin]]
 name = "client"
@@ -21,6 +21,7 @@ path = "src/server/bin/main.rs"
 required-features = ["server"]
 
 [dependencies]
+ctrlc = { version = "*", optional = true }
 glium = { version = "*", optional = true }
 image = { version = "*", optional = true }
 serde = { version = "*", features = ["derive"] }
