@@ -1,8 +1,8 @@
 use glium::{Display, DrawParameters, Frame, IndexBuffer, Program, Surface, VertexBuffer};
 
 use super::shapes::{Normal, Position, TexCoord};
-
-pub const CHUNK_SIZE: usize = 16;
+use super::super::blocks::{Block, CHUNK_SIZE};
+use super::super::server::chunk::Chunk as ServerChunk;
 
 const TEX_COORDS_EMPTY: TexCoord = TexCoord {
     tex_coords: [0.0, 0.0],
@@ -32,12 +32,6 @@ const NORM_RIGHT: Normal = Normal {
     normal: [0.0, 0.0, -1.0],
 };
 
-#[derive(Copy, Clone, Debug, PartialEq)]
-pub enum Block {
-    Air,
-    Solid,
-}
-
 #[derive(Debug)]
 pub struct Mesh {
     positions: VertexBuffer<Position>,
@@ -57,24 +51,12 @@ pub struct Chunk {
 }
 
 impl Chunk {
-    pub fn new(chunk_x: i32, chunk_y: i32, chunk_z: i32) -> Chunk {
-        let mut blocks = Box::new([[[Block::Air; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]);
-
-        for square in blocks.iter_mut() {
-            for line in square.iter_mut() {
-                for block in line.iter_mut() {
-                    if rand::random::<f32>() < 0.1 {
-                        *block = Block::Solid;
-                    }
-                }
-            }
-        }
-
+    pub fn from_server_chunk(chunk: ServerChunk) -> Chunk {
         Chunk {
-            chunk_x,
-            chunk_y,
-            chunk_z,
-            blocks,
+            chunk_x: chunk.get_chunk_x(),
+            chunk_y: chunk.get_chunk_y(),
+            chunk_z: chunk.get_chunk_z(),
+            blocks: Box::new(*chunk.get_blocks()),
             mesh: None,
         }
     }

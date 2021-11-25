@@ -8,4 +8,5 @@ pub mod client;
 #[cfg(feature = "server")]
 pub mod server;
 
+pub mod blocks;
 pub mod packet;

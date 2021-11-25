@@ -12,13 +12,13 @@ use glium::glutin::{
     ContextBuilder,
 };
 use glium::{Display, Program, Surface};
-use minecraft_rust::client::player::Player;
 use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
 
 use minecraft_rust::client::camera::Camera;
 use minecraft_rust::client::chunk::Chunk;
 use minecraft_rust::packet::{ServerPacket, UserPacket};
+use minecraft_rust::client::player::Player;
 
 const USERNAME: &str = "uwu";
 const ADDRESS: &str = "0.0.0.0:4269";
@@ -64,7 +64,7 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
     };
 
     let mut camera = Camera::new(10.0, 0.01, 90.0);
-    let mut chunk = Chunk::new(0, 0, 0);
+    let mut chunks = vec![];
     let mut players = HashMap::new();
 
     let mut last = Instant::now();
@@ -153,6 +153,10 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
                         player.position = pos;
                     }
                 }
+
+                ServerPacket::NewChunk { chunk } => {
+                    chunks.push(Chunk::from_server_chunk(chunk));
+                }
             }
         }
 
@@ -168,8 +172,10 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
 
         let view = camera.view_matrix();
 
-        chunk.generate_mesh(&display);
-        chunk.render(&mut target, &program, perspective, view, &params);
+        for chunk in chunks.iter_mut() {
+            chunk.generate_mesh(&display);
+            chunk.render(&mut target, &program, perspective, view, &params);
+        }
 
         for (_, player) in players.iter() {
             player.render(&mut target, &program, perspective, view, &params);
@@ -203,7 +209,7 @@ async fn transmitting(mut rx: mpsc::Receiver<UserPacket>, sock: Arc<UdpSocket>) 
 }
 
 async fn receiving(tx: mpsc::Sender<UserPacket>, sock: Arc<UdpSocket>, recv_tx: mpsc::Sender<ServerPacket>) -> std::io::Result<()> {
-    let mut buf = Box::new([0; 1024]);
+    let mut buf = Box::new([0; 2usize.pow(20)]);
 
     loop {
         let len = sock.recv(&mut *buf).await?;
@@ -213,6 +219,14 @@ async fn receiving(tx: mpsc::Sender<UserPacket>, sock: Arc<UdpSocket>, recv_tx: 
             ServerPacket::ConnectionAccepted => {
                 println!("Connected to server!");
                 tokio::spawn(ping(tx.clone()));
+                tx.send(UserPacket::RequestChunk { x: 0, y: 0, z: 0 }).await.unwrap();
+                tx.send(UserPacket::RequestChunk { x: 1, y: 0, z: 0 }).await.unwrap();
+                tx.send(UserPacket::RequestChunk { x: 0, y: 0, z: 1 }).await.unwrap();
+                tx.send(UserPacket::RequestChunk { x: 1, y: 0, z: 1 }).await.unwrap();
+                tx.send(UserPacket::RequestChunk { x: 0, y: 1, z: 0 }).await.unwrap();
+                tx.send(UserPacket::RequestChunk { x: 1, y: 1, z: 0 }).await.unwrap();
+                tx.send(UserPacket::RequestChunk { x: 0, y: 1, z: 1 }).await.unwrap();
+                tx.send(UserPacket::RequestChunk { x: 1, y: 1, z: 1 }).await.unwrap();
             }
 
             ServerPacket::Disconnected { reason } => {
@@ -239,6 +253,10 @@ async fn receiving(tx: mpsc::Sender<UserPacket>, sock: Arc<UdpSocket>, recv_tx: 
 
             ServerPacket::MoveUser { name, pos } => {
                 recv_tx.send(ServerPacket::MoveUser { name, pos }).await.unwrap();
+            }
+
+            ServerPacket::NewChunk { chunk } => {
+                recv_tx.send(ServerPacket::NewChunk { chunk }).await.unwrap();
             }
         }
     }
