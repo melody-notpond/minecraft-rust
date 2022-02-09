@@ -20,8 +20,8 @@ use minecraft_rust::client::chunk::Chunk;
 use minecraft_rust::packet::{ServerPacket, UserPacket};
 use minecraft_rust::client::player::Player;
 
-const USERNAME: &str = "uwu";
-const ADDRESS: &str = "0.0.0.0:4269";
+const USERNAME: &str = "owo";
+const ADDRESS: &str = "0.0.0.0:6429";
 
 const VERTEX_SHADER: &str = include_str!("../shaders/vertex.glsl");
 const FRAGMENT_SHADER: &str = include_str!("../shaders/fragment.glsl");
@@ -64,7 +64,7 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
     };
 
     let mut camera = Camera::new(10.0, 0.01, 90.0);
-    let mut chunks = vec![];
+    let mut chunks = HashMap::new();
     let mut players = HashMap::new();
 
     let mut last = Instant::now();
@@ -133,8 +133,9 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
         }
 
         let delta = Instant::now() - last;
+        let mut keys: Vec<(i32, i32, i32)> = Vec::new();
 
-        while let Some(packet) = rx.try_recv().ok() {
+        while let Ok(packet) = rx.try_recv() {
             match packet {
                 ServerPacket::ConnectionAccepted => (),
                 ServerPacket::Disconnected { .. } => (),
@@ -155,7 +156,7 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
                 }
 
                 ServerPacket::NewChunk { chunk } => {
-                    chunks.push(Chunk::from_server_chunk(chunk));
+                    chunks.insert((chunk.get_chunk_x(), chunk.get_chunk_y(), chunk.get_chunk_z()), Chunk::from_server_chunk(chunk));
                 }
             }
         }
@@ -172,10 +173,14 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
 
         let view = camera.view_matrix();
 
-        for chunk in chunks.iter_mut() {
-            chunk.generate_mesh(&display);
+        keys.extend(chunks.keys());
+        for key in keys.iter() {
+            let mut chunk = chunks.remove(key).unwrap();
+            chunk.generate_mesh(&display, &chunks);
             chunk.render(&mut target, &program, perspective, view, &params);
+            chunks.insert(*key, chunk);
         }
+        keys.clear();
 
         for (_, player) in players.iter() {
             player.render(&mut target, &program, perspective, view, &params);

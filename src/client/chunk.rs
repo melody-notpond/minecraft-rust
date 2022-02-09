@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use glium::{Display, DrawParameters, Frame, IndexBuffer, Program, Surface, VertexBuffer};
 
 use super::shapes::{Normal, Position, TexCoord};
@@ -61,7 +63,25 @@ impl Chunk {
         }
     }
 
-    pub fn generate_mesh(&mut self, display: &Display) {
+    fn get_block<'a>(&'a self, chunks: &'a HashMap<(i32, i32, i32), Chunk>, x: isize, y: isize, z: isize) -> &'a Block {
+        if x < 0 {
+            chunks.get(&(self.chunk_x - 1, self.chunk_y, self.chunk_z)).map(|v| &v.blocks[CHUNK_SIZE - 1][y as usize][z as usize]).unwrap_or(&Block::Air)
+        } else if x > CHUNK_SIZE as isize - 1 {
+            chunks.get(&(self.chunk_x + 1, self.chunk_y, self.chunk_z)).map(|v| &v.blocks[0][y as usize][z as usize]).unwrap_or(&Block::Air)
+        } else if y < 0 {
+            chunks.get(&(self.chunk_x, self.chunk_y - 1, self.chunk_z)).map(|v| &v.blocks[x as usize][CHUNK_SIZE - 1][z as usize]).unwrap_or(&Block::Air)
+        } else if y > CHUNK_SIZE as isize - 1 {
+            chunks.get(&(self.chunk_x, self.chunk_y + 1, self.chunk_z)).map(|v| &v.blocks[x as usize][0][z as usize]).unwrap_or(&Block::Air)
+        } else if z < 0 {
+            chunks.get(&(self.chunk_x, self.chunk_y, self.chunk_z - 1)).map(|v| &v.blocks[x as usize][y as usize][CHUNK_SIZE - 1]).unwrap_or(&Block::Air)
+        } else if z > CHUNK_SIZE as isize - 1 {
+            chunks.get(&(self.chunk_x, self.chunk_y, self.chunk_z + 1)).map(|v| &v.blocks[x as usize][y as usize][0]).unwrap_or(&Block::Air)
+        } else {
+            &self.blocks[x as usize][y as usize][z as usize]
+        }
+    }
+
+    pub fn generate_mesh(&mut self, display: &Display, chunks: &HashMap<(i32, i32, i32), Chunk>) {
         if self.mesh.is_some() {
             return;
         }
@@ -74,214 +94,207 @@ impl Chunk {
         for x in 0..CHUNK_SIZE {
             for y in 0..CHUNK_SIZE {
                 for z in 0..CHUNK_SIZE {
-                    if self.blocks[x][y][z] == Block::Solid
-                        && (y == CHUNK_SIZE - 1 || self.blocks[x][y + 1][z] == Block::Air)
-                    {
-                        let i = positions.len() as u32;
-                        positions.push(Position {
-                            position: [x as f32, y as f32 + 1.0, z as f32],
-                        });
-                        positions.push(Position {
-                            position: [x as f32, y as f32 + 1.0, z as f32 + 1.0],
-                        });
-                        positions.push(Position {
-                            position: [x as f32 + 1.0, y as f32 + 1.0, z as f32],
-                        });
-                        positions.push(Position {
-                            position: [x as f32 + 1.0, y as f32 + 1.0, z as f32 + 1.0],
-                        });
+                    let x = x as isize;
+                    let y = y as isize;
+                    let z = z as isize;
+                    if *self.get_block(chunks, x, y, z) == Block::Solid {
+                        if *self.get_block(chunks, x, y + 1, z) == Block::Air {
+                            let i = positions.len() as u32;
+                            positions.push(Position {
+                                position: [x as f32, y as f32 + 1.0, z as f32],
+                            });
+                            positions.push(Position {
+                                position: [x as f32, y as f32 + 1.0, z as f32 + 1.0],
+                            });
+                            positions.push(Position {
+                                position: [x as f32 + 1.0, y as f32 + 1.0, z as f32],
+                            });
+                            positions.push(Position {
+                                position: [x as f32 + 1.0, y as f32 + 1.0, z as f32 + 1.0],
+                            });
 
-                        tex_coords.push(TEX_COORDS_EMPTY);
-                        tex_coords.push(TEX_COORDS_EMPTY);
-                        tex_coords.push(TEX_COORDS_EMPTY);
-                        tex_coords.push(TEX_COORDS_EMPTY);
+                            tex_coords.push(TEX_COORDS_EMPTY);
+                            tex_coords.push(TEX_COORDS_EMPTY);
+                            tex_coords.push(TEX_COORDS_EMPTY);
+                            tex_coords.push(TEX_COORDS_EMPTY);
 
-                        normals.push(NORM_UP);
-                        normals.push(NORM_UP);
-                        normals.push(NORM_UP);
-                        normals.push(NORM_UP);
+                            normals.push(NORM_UP);
+                            normals.push(NORM_UP);
+                            normals.push(NORM_UP);
+                            normals.push(NORM_UP);
 
-                        indices.push(i);
-                        indices.push(i + 2);
-                        indices.push(i + 1);
-                        indices.push(i + 1);
-                        indices.push(i + 2);
-                        indices.push(i + 3);
-                    }
+                            indices.push(i);
+                            indices.push(i + 2);
+                            indices.push(i + 1);
+                            indices.push(i + 1);
+                            indices.push(i + 2);
+                            indices.push(i + 3);
+                        }
 
-                    if self.blocks[x][y][z] == Block::Solid
-                        && (y == 0 || self.blocks[x][y - 1][z] == Block::Air)
-                    {
-                        let i = positions.len() as u32;
-                        positions.push(Position {
-                            position: [x as f32, y as f32, z as f32],
-                        });
-                        positions.push(Position {
-                            position: [x as f32, y as f32, z as f32 + 1.0],
-                        });
-                        positions.push(Position {
-                            position: [x as f32 + 1.0, y as f32, z as f32],
-                        });
-                        positions.push(Position {
-                            position: [x as f32 + 1.0, y as f32, z as f32 + 1.0],
-                        });
+                        if *self.get_block(chunks, x, y - 1, z) == Block::Air {
+                            let i = positions.len() as u32;
+                            positions.push(Position {
+                                position: [x as f32, y as f32, z as f32],
+                            });
+                            positions.push(Position {
+                                position: [x as f32, y as f32, z as f32 + 1.0],
+                            });
+                            positions.push(Position {
+                                position: [x as f32 + 1.0, y as f32, z as f32],
+                            });
+                            positions.push(Position {
+                                position: [x as f32 + 1.0, y as f32, z as f32 + 1.0],
+                            });
 
-                        tex_coords.push(TEX_COORDS_EMPTY);
-                        tex_coords.push(TEX_COORDS_EMPTY);
-                        tex_coords.push(TEX_COORDS_EMPTY);
-                        tex_coords.push(TEX_COORDS_EMPTY);
+                            tex_coords.push(TEX_COORDS_EMPTY);
+                            tex_coords.push(TEX_COORDS_EMPTY);
+                            tex_coords.push(TEX_COORDS_EMPTY);
+                            tex_coords.push(TEX_COORDS_EMPTY);
 
-                        normals.push(NORM_DOWN);
-                        normals.push(NORM_DOWN);
-                        normals.push(NORM_DOWN);
-                        normals.push(NORM_DOWN);
+                            normals.push(NORM_DOWN);
+                            normals.push(NORM_DOWN);
+                            normals.push(NORM_DOWN);
+                            normals.push(NORM_DOWN);
 
-                        indices.push(i);
-                        indices.push(i + 1);
-                        indices.push(i + 2);
-                        indices.push(i + 1);
-                        indices.push(i + 3);
-                        indices.push(i + 2);
-                    }
+                            indices.push(i);
+                            indices.push(i + 1);
+                            indices.push(i + 2);
+                            indices.push(i + 1);
+                            indices.push(i + 3);
+                            indices.push(i + 2);
+                        }
 
-                    if self.blocks[x][y][z] == Block::Solid
-                        && (x == CHUNK_SIZE - 1 || self.blocks[x + 1][y][z] == Block::Air)
-                    {
-                        let i = positions.len() as u32;
-                        positions.push(Position {
-                            position: [x as f32 + 1.0, y as f32, z as f32],
-                        });
-                        positions.push(Position {
-                            position: [x as f32 + 1.0, y as f32, z as f32 + 1.0],
-                        });
-                        positions.push(Position {
-                            position: [x as f32 + 1.0, y as f32 + 1.0, z as f32],
-                        });
-                        positions.push(Position {
-                            position: [x as f32 + 1.0, y as f32 + 1.0, z as f32 + 1.0],
-                        });
+                        if *self.get_block(chunks, x + 1, y, z) == Block::Air {
+                            let i = positions.len() as u32;
+                            positions.push(Position {
+                                position: [x as f32 + 1.0, y as f32, z as f32],
+                            });
+                            positions.push(Position {
+                                position: [x as f32 + 1.0, y as f32, z as f32 + 1.0],
+                            });
+                            positions.push(Position {
+                                position: [x as f32 + 1.0, y as f32 + 1.0, z as f32],
+                            });
+                            positions.push(Position {
+                                position: [x as f32 + 1.0, y as f32 + 1.0, z as f32 + 1.0],
+                            });
 
-                        tex_coords.push(TEX_COORDS_EMPTY);
-                        tex_coords.push(TEX_COORDS_EMPTY);
-                        tex_coords.push(TEX_COORDS_EMPTY);
-                        tex_coords.push(TEX_COORDS_EMPTY);
+                            tex_coords.push(TEX_COORDS_EMPTY);
+                            tex_coords.push(TEX_COORDS_EMPTY);
+                            tex_coords.push(TEX_COORDS_EMPTY);
+                            tex_coords.push(TEX_COORDS_EMPTY);
 
-                        normals.push(NORM_FRONT);
-                        normals.push(NORM_FRONT);
-                        normals.push(NORM_FRONT);
-                        normals.push(NORM_FRONT);
+                            normals.push(NORM_FRONT);
+                            normals.push(NORM_FRONT);
+                            normals.push(NORM_FRONT);
+                            normals.push(NORM_FRONT);
 
-                        indices.push(i);
-                        indices.push(i + 1);
-                        indices.push(i + 2);
-                        indices.push(i + 1);
-                        indices.push(i + 3);
-                        indices.push(i + 2);
-                    }
+                            indices.push(i);
+                            indices.push(i + 1);
+                            indices.push(i + 2);
+                            indices.push(i + 1);
+                            indices.push(i + 3);
+                            indices.push(i + 2);
+                        }
 
-                    if self.blocks[x][y][z] == Block::Solid
-                        && (x == 0 || self.blocks[x - 1][y][z] == Block::Air)
-                    {
-                        let i = positions.len() as u32;
-                        positions.push(Position {
-                            position: [x as f32, y as f32, z as f32],
-                        });
-                        positions.push(Position {
-                            position: [x as f32, y as f32, z as f32 + 1.0],
-                        });
-                        positions.push(Position {
-                            position: [x as f32, y as f32 + 1.0, z as f32],
-                        });
-                        positions.push(Position {
-                            position: [x as f32, y as f32 + 1.0, z as f32 + 1.0],
-                        });
+                        if *self.get_block(chunks, x - 1, y, z) == Block::Air {
+                            let i = positions.len() as u32;
+                            positions.push(Position {
+                                position: [x as f32, y as f32, z as f32],
+                            });
+                            positions.push(Position {
+                                position: [x as f32, y as f32, z as f32 + 1.0],
+                            });
+                            positions.push(Position {
+                                position: [x as f32, y as f32 + 1.0, z as f32],
+                            });
+                            positions.push(Position {
+                                position: [x as f32, y as f32 + 1.0, z as f32 + 1.0],
+                            });
 
-                        tex_coords.push(TEX_COORDS_EMPTY);
-                        tex_coords.push(TEX_COORDS_EMPTY);
-                        tex_coords.push(TEX_COORDS_EMPTY);
-                        tex_coords.push(TEX_COORDS_EMPTY);
+                            tex_coords.push(TEX_COORDS_EMPTY);
+                            tex_coords.push(TEX_COORDS_EMPTY);
+                            tex_coords.push(TEX_COORDS_EMPTY);
+                            tex_coords.push(TEX_COORDS_EMPTY);
 
-                        normals.push(NORM_BACK);
-                        normals.push(NORM_BACK);
-                        normals.push(NORM_BACK);
-                        normals.push(NORM_BACK);
+                            normals.push(NORM_BACK);
+                            normals.push(NORM_BACK);
+                            normals.push(NORM_BACK);
+                            normals.push(NORM_BACK);
 
-                        indices.push(i);
-                        indices.push(i + 2);
-                        indices.push(i + 1);
-                        indices.push(i + 1);
-                        indices.push(i + 2);
-                        indices.push(i + 3);
-                    }
+                            indices.push(i);
+                            indices.push(i + 2);
+                            indices.push(i + 1);
+                            indices.push(i + 1);
+                            indices.push(i + 2);
+                            indices.push(i + 3);
+                        }
 
-                    if self.blocks[x][y][z] == Block::Solid
-                        && (z == CHUNK_SIZE - 1 || self.blocks[x][y][z + 1] == Block::Air)
-                    {
-                        let i = positions.len() as u32;
-                        positions.push(Position {
-                            position: [x as f32, y as f32, z as f32 + 1.0],
-                        });
-                        positions.push(Position {
-                            position: [x as f32, y as f32 + 1.0, z as f32 + 1.0],
-                        });
-                        positions.push(Position {
-                            position: [x as f32 + 1.0, y as f32, z as f32 + 1.0],
-                        });
-                        positions.push(Position {
-                            position: [x as f32 + 1.0, y as f32 + 1.0, z as f32 + 1.0],
-                        });
+                        if *self.get_block(chunks, x, y, z + 1) == Block::Air {
+                            let i = positions.len() as u32;
+                            positions.push(Position {
+                                position: [x as f32, y as f32, z as f32 + 1.0],
+                            });
+                            positions.push(Position {
+                                position: [x as f32, y as f32 + 1.0, z as f32 + 1.0],
+                            });
+                            positions.push(Position {
+                                position: [x as f32 + 1.0, y as f32, z as f32 + 1.0],
+                            });
+                            positions.push(Position {
+                                position: [x as f32 + 1.0, y as f32 + 1.0, z as f32 + 1.0],
+                            });
 
-                        tex_coords.push(TEX_COORDS_EMPTY);
-                        tex_coords.push(TEX_COORDS_EMPTY);
-                        tex_coords.push(TEX_COORDS_EMPTY);
-                        tex_coords.push(TEX_COORDS_EMPTY);
+                            tex_coords.push(TEX_COORDS_EMPTY);
+                            tex_coords.push(TEX_COORDS_EMPTY);
+                            tex_coords.push(TEX_COORDS_EMPTY);
+                            tex_coords.push(TEX_COORDS_EMPTY);
 
-                        normals.push(NORM_LEFT);
-                        normals.push(NORM_LEFT);
-                        normals.push(NORM_LEFT);
-                        normals.push(NORM_LEFT);
+                            normals.push(NORM_LEFT);
+                            normals.push(NORM_LEFT);
+                            normals.push(NORM_LEFT);
+                            normals.push(NORM_LEFT);
 
-                        indices.push(i);
-                        indices.push(i + 1);
-                        indices.push(i + 2);
-                        indices.push(i + 1);
-                        indices.push(i + 3);
-                        indices.push(i + 2);
-                    }
+                            indices.push(i);
+                            indices.push(i + 1);
+                            indices.push(i + 2);
+                            indices.push(i + 1);
+                            indices.push(i + 3);
+                            indices.push(i + 2);
+                        }
 
-                    if self.blocks[x][y][z] == Block::Solid
-                        && (z == 0 || self.blocks[x][y][z - 1] == Block::Air)
-                    {
-                        let i = positions.len() as u32;
-                        positions.push(Position {
-                            position: [x as f32, y as f32, z as f32],
-                        });
-                        positions.push(Position {
-                            position: [x as f32, y as f32 + 1.0, z as f32],
-                        });
-                        positions.push(Position {
-                            position: [x as f32 + 1.0, y as f32, z as f32],
-                        });
-                        positions.push(Position {
-                            position: [x as f32 + 1.0, y as f32 + 1.0, z as f32],
-                        });
+                        if *self.get_block(chunks, x, y, z - 1) == Block::Air {
+                            let i = positions.len() as u32;
+                            positions.push(Position {
+                                position: [x as f32, y as f32, z as f32],
+                            });
+                            positions.push(Position {
+                                position: [x as f32, y as f32 + 1.0, z as f32],
+                            });
+                            positions.push(Position {
+                                position: [x as f32 + 1.0, y as f32, z as f32],
+                            });
+                            positions.push(Position {
+                                position: [x as f32 + 1.0, y as f32 + 1.0, z as f32],
+                            });
 
-                        tex_coords.push(TEX_COORDS_EMPTY);
-                        tex_coords.push(TEX_COORDS_EMPTY);
-                        tex_coords.push(TEX_COORDS_EMPTY);
-                        tex_coords.push(TEX_COORDS_EMPTY);
+                            tex_coords.push(TEX_COORDS_EMPTY);
+                            tex_coords.push(TEX_COORDS_EMPTY);
+                            tex_coords.push(TEX_COORDS_EMPTY);
+                            tex_coords.push(TEX_COORDS_EMPTY);
 
-                        normals.push(NORM_RIGHT);
-                        normals.push(NORM_RIGHT);
-                        normals.push(NORM_RIGHT);
-                        normals.push(NORM_RIGHT);
+                            normals.push(NORM_RIGHT);
+                            normals.push(NORM_RIGHT);
+                            normals.push(NORM_RIGHT);
+                            normals.push(NORM_RIGHT);
 
-                        indices.push(i);
-                        indices.push(i + 2);
-                        indices.push(i + 1);
-                        indices.push(i + 1);
-                        indices.push(i + 2);
-                        indices.push(i + 3);
+                            indices.push(i);
+                            indices.push(i + 2);
+                            indices.push(i + 1);
+                            indices.push(i + 1);
+                            indices.push(i + 2);
+                            indices.push(i + 3);
+                        }
                     }
                 }
             }
@@ -338,9 +351,9 @@ impl Chunk {
                 .draw(
                     (&mesh.positions, &mesh.tex_coords, &mesh.normals),
                     &mesh.indices,
-                    &program,
+                    program,
                     &uniforms,
-                    &params,
+                    params,
                 )
                 .unwrap();
         }
