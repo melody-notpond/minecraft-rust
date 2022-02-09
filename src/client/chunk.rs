@@ -80,9 +80,9 @@ impl Chunk {
         }
     }
 
-    pub fn generate_mesh(&mut self, display: &Display, chunks: &HashMap<(i32, i32, i32), ChunkWaiter>) {
+    pub fn generate_mesh(&mut self, display: &Display, chunks: &HashMap<(i32, i32, i32), ChunkWaiter>) -> bool {
         if self.mesh.is_some() {
-            return;
+            return false;
         }
 
         let mut positions = vec![];
@@ -339,6 +339,8 @@ impl Chunk {
             normals,
             indices,
         }));
+
+        true
     }
 
     pub fn render(

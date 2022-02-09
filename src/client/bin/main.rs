@@ -67,9 +67,9 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
     let mut chunks = HashMap::new();
     let mut players = HashMap::new();
 
-    for x in -2..=2 {
-        for y in -2..=2 {
-            for z in -2..=2 {
+    for x in -5..=5 {
+        for y in -5..=5 {
+            for z in -5..=5 {
                 chunks.insert((x, y, z), ChunkWaiter::Timestamp(0));
             }
         }
@@ -192,7 +192,7 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
 
         camera.tick(delta);
         if camera.is_moving() {
-            tx.blocking_send(UserPacket::MoveSelf { pos: camera.get_pos() }).unwrap();
+            let _ = tx.try_send(UserPacket::MoveSelf { pos: camera.get_pos() });
         }
 
         let mut target = display.draw();
@@ -202,14 +202,21 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
 
         let view = camera.view_matrix();
 
+        let mut changed = 0;
         keys.extend(chunks.keys());
         for key in keys.iter() {
             let mut chunk = chunks.remove(key).unwrap();
             if let ChunkWaiter::Chunk(chunk) = &mut chunk {
-                chunk.generate_mesh(&display, &chunks);
+                if chunk.generate_mesh(&display, &chunks) {
+                    changed += 1;
+                }
                 chunk.render(&mut target, &program, perspective, view, &params);
             }
             chunks.insert(*key, chunk);
+
+            if changed > 50 {
+                break;
+            }
         }
         keys.clear();
 
