@@ -49,7 +49,7 @@ pub struct Chunk {
     chunk_z: i32,
     blocks: Box<[[[Block; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]>,
 
-    mesh: Option<Mesh>,
+    mesh: Option<Box<Mesh>>,
 }
 
 impl Chunk {
@@ -63,25 +63,24 @@ impl Chunk {
         }
     }
 
-    fn get_block<'a>(&'a self, chunks: &'a HashMap<(i32, i32, i32), Chunk>, x: isize, y: isize, z: isize) -> &'a Block {
+    fn get_block<'a>(&'a self, chunks: &'a HashMap<(i32, i32, i32), ChunkWaiter>, x: isize, y: isize, z: isize) -> &'a Block {
         if x < 0 {
-            chunks.get(&(self.chunk_x - 1, self.chunk_y, self.chunk_z)).map(|v| &v.blocks[CHUNK_SIZE - 1][y as usize][z as usize]).unwrap_or(&Block::Air)
+            chunks.get(&(self.chunk_x - 1, self.chunk_y, self.chunk_z)).and_then(ChunkWaiter::chunk).map(|v| &v.blocks[CHUNK_SIZE - 1][y as usize][z as usize]).unwrap_or(&Block::Air)
         } else if x > CHUNK_SIZE as isize - 1 {
-            chunks.get(&(self.chunk_x + 1, self.chunk_y, self.chunk_z)).map(|v| &v.blocks[0][y as usize][z as usize]).unwrap_or(&Block::Air)
-        } else if y < 0 {
-            chunks.get(&(self.chunk_x, self.chunk_y - 1, self.chunk_z)).map(|v| &v.blocks[x as usize][CHUNK_SIZE - 1][z as usize]).unwrap_or(&Block::Air)
+            chunks.get(&(self.chunk_x + 1, self.chunk_y, self.chunk_z)).and_then(ChunkWaiter::chunk).map(|v| &v.blocks[0][y as usize][z as usize]).unwrap_or(&Block::Air) } else if y < 0 {
+            chunks.get(&(self.chunk_x, self.chunk_y - 1, self.chunk_z)).and_then(ChunkWaiter::chunk).map(|v| &v.blocks[x as usize][CHUNK_SIZE - 1][z as usize]).unwrap_or(&Block::Air)
         } else if y > CHUNK_SIZE as isize - 1 {
-            chunks.get(&(self.chunk_x, self.chunk_y + 1, self.chunk_z)).map(|v| &v.blocks[x as usize][0][z as usize]).unwrap_or(&Block::Air)
+            chunks.get(&(self.chunk_x, self.chunk_y + 1, self.chunk_z)).and_then(ChunkWaiter::chunk).map(|v| &v.blocks[x as usize][0][z as usize]).unwrap_or(&Block::Air)
         } else if z < 0 {
-            chunks.get(&(self.chunk_x, self.chunk_y, self.chunk_z - 1)).map(|v| &v.blocks[x as usize][y as usize][CHUNK_SIZE - 1]).unwrap_or(&Block::Air)
+            chunks.get(&(self.chunk_x, self.chunk_y, self.chunk_z - 1)).and_then(ChunkWaiter::chunk).map(|v| &v.blocks[x as usize][y as usize][CHUNK_SIZE - 1]).unwrap_or(&Block::Air)
         } else if z > CHUNK_SIZE as isize - 1 {
-            chunks.get(&(self.chunk_x, self.chunk_y, self.chunk_z + 1)).map(|v| &v.blocks[x as usize][y as usize][0]).unwrap_or(&Block::Air)
+            chunks.get(&(self.chunk_x, self.chunk_y, self.chunk_z + 1)).and_then(ChunkWaiter::chunk).map(|v| &v.blocks[x as usize][y as usize][0]).unwrap_or(&Block::Air)
         } else {
             &self.blocks[x as usize][y as usize][z as usize]
         }
     }
 
-    pub fn generate_mesh(&mut self, display: &Display, chunks: &HashMap<(i32, i32, i32), Chunk>) {
+    pub fn generate_mesh(&mut self, display: &Display, chunks: &HashMap<(i32, i32, i32), ChunkWaiter>) {
         if self.mesh.is_some() {
             return;
         }
@@ -99,18 +98,22 @@ impl Chunk {
                     let z = z as isize;
                     if *self.get_block(chunks, x, y, z) == Block::Solid {
                         if *self.get_block(chunks, x, y + 1, z) == Block::Air {
+                            let x = x as f32 * 0.5;
+                            let y = y as f32 * 0.5;
+                            let z = z as f32 * 0.5;
+
                             let i = positions.len() as u32;
                             positions.push(Position {
-                                position: [x as f32, y as f32 + 1.0, z as f32],
+                                position: [x as f32, y as f32 + 0.5, z as f32],
                             });
                             positions.push(Position {
-                                position: [x as f32, y as f32 + 1.0, z as f32 + 1.0],
+                                position: [x as f32, y as f32 + 0.5, z as f32 + 0.5],
                             });
                             positions.push(Position {
-                                position: [x as f32 + 1.0, y as f32 + 1.0, z as f32],
+                                position: [x as f32 + 0.5, y as f32 + 0.5, z as f32],
                             });
                             positions.push(Position {
-                                position: [x as f32 + 1.0, y as f32 + 1.0, z as f32 + 1.0],
+                                position: [x as f32 + 0.5, y as f32 + 0.5, z as f32 + 0.5],
                             });
 
                             tex_coords.push(TEX_COORDS_EMPTY);
@@ -132,18 +135,22 @@ impl Chunk {
                         }
 
                         if *self.get_block(chunks, x, y - 1, z) == Block::Air {
+                            let x = x as f32 * 0.5;
+                            let y = y as f32 * 0.5;
+                            let z = z as f32 * 0.5;
+
                             let i = positions.len() as u32;
                             positions.push(Position {
                                 position: [x as f32, y as f32, z as f32],
                             });
                             positions.push(Position {
-                                position: [x as f32, y as f32, z as f32 + 1.0],
+                                position: [x as f32, y as f32, z as f32 + 0.5],
                             });
                             positions.push(Position {
-                                position: [x as f32 + 1.0, y as f32, z as f32],
+                                position: [x as f32 + 0.5, y as f32, z as f32],
                             });
                             positions.push(Position {
-                                position: [x as f32 + 1.0, y as f32, z as f32 + 1.0],
+                                position: [x as f32 + 0.5, y as f32, z as f32 + 0.5],
                             });
 
                             tex_coords.push(TEX_COORDS_EMPTY);
@@ -165,18 +172,22 @@ impl Chunk {
                         }
 
                         if *self.get_block(chunks, x + 1, y, z) == Block::Air {
+                            let x = x as f32 * 0.5;
+                            let y = y as f32 * 0.5;
+                            let z = z as f32 * 0.5;
+
                             let i = positions.len() as u32;
                             positions.push(Position {
-                                position: [x as f32 + 1.0, y as f32, z as f32],
+                                position: [x as f32 + 0.5, y as f32, z as f32],
                             });
                             positions.push(Position {
-                                position: [x as f32 + 1.0, y as f32, z as f32 + 1.0],
+                                position: [x as f32 + 0.5, y as f32, z as f32 + 0.5],
                             });
                             positions.push(Position {
-                                position: [x as f32 + 1.0, y as f32 + 1.0, z as f32],
+                                position: [x as f32 + 0.5, y as f32 + 0.5, z as f32],
                             });
                             positions.push(Position {
-                                position: [x as f32 + 1.0, y as f32 + 1.0, z as f32 + 1.0],
+                                position: [x as f32 + 0.5, y as f32 + 0.5, z as f32 + 0.5],
                             });
 
                             tex_coords.push(TEX_COORDS_EMPTY);
@@ -198,18 +209,22 @@ impl Chunk {
                         }
 
                         if *self.get_block(chunks, x - 1, y, z) == Block::Air {
+                            let x = x as f32 * 0.5;
+                            let y = y as f32 * 0.5;
+                            let z = z as f32 * 0.5;
+
                             let i = positions.len() as u32;
                             positions.push(Position {
                                 position: [x as f32, y as f32, z as f32],
                             });
                             positions.push(Position {
-                                position: [x as f32, y as f32, z as f32 + 1.0],
+                                position: [x as f32, y as f32, z as f32 + 0.5],
                             });
                             positions.push(Position {
-                                position: [x as f32, y as f32 + 1.0, z as f32],
+                                position: [x as f32, y as f32 + 0.5, z as f32],
                             });
                             positions.push(Position {
-                                position: [x as f32, y as f32 + 1.0, z as f32 + 1.0],
+                                position: [x as f32, y as f32 + 0.5, z as f32 + 0.5],
                             });
 
                             tex_coords.push(TEX_COORDS_EMPTY);
@@ -231,18 +246,22 @@ impl Chunk {
                         }
 
                         if *self.get_block(chunks, x, y, z + 1) == Block::Air {
+                            let x = x as f32 * 0.5;
+                            let y = y as f32 * 0.5;
+                            let z = z as f32 * 0.5;
+
                             let i = positions.len() as u32;
                             positions.push(Position {
-                                position: [x as f32, y as f32, z as f32 + 1.0],
+                                position: [x as f32, y as f32, z as f32 + 0.5],
                             });
                             positions.push(Position {
-                                position: [x as f32, y as f32 + 1.0, z as f32 + 1.0],
+                                position: [x as f32, y as f32 + 0.5, z as f32 + 0.5],
                             });
                             positions.push(Position {
-                                position: [x as f32 + 1.0, y as f32, z as f32 + 1.0],
+                                position: [x as f32 + 0.5, y as f32, z as f32 + 0.5],
                             });
                             positions.push(Position {
-                                position: [x as f32 + 1.0, y as f32 + 1.0, z as f32 + 1.0],
+                                position: [x as f32 + 0.5, y as f32 + 0.5, z as f32 + 0.5],
                             });
 
                             tex_coords.push(TEX_COORDS_EMPTY);
@@ -264,18 +283,22 @@ impl Chunk {
                         }
 
                         if *self.get_block(chunks, x, y, z - 1) == Block::Air {
+                            let x = x as f32 * 0.5;
+                            let y = y as f32 * 0.5;
+                            let z = z as f32 * 0.5;
+
                             let i = positions.len() as u32;
                             positions.push(Position {
                                 position: [x as f32, y as f32, z as f32],
                             });
                             positions.push(Position {
-                                position: [x as f32, y as f32 + 1.0, z as f32],
+                                position: [x as f32, y as f32 + 0.5, z as f32],
                             });
                             positions.push(Position {
-                                position: [x as f32 + 1.0, y as f32, z as f32],
+                                position: [x as f32 + 0.5, y as f32, z as f32],
                             });
                             positions.push(Position {
-                                position: [x as f32 + 1.0, y as f32 + 1.0, z as f32],
+                                position: [x as f32 + 0.5, y as f32 + 0.5, z as f32],
                             });
 
                             tex_coords.push(TEX_COORDS_EMPTY);
@@ -310,12 +333,12 @@ impl Chunk {
         )
         .unwrap();
 
-        self.mesh = Some(Mesh {
+        self.mesh = Some(Box::new(Mesh {
             positions,
             tex_coords,
             normals,
             indices,
-        });
+        }));
     }
 
     pub fn render(
@@ -328,9 +351,9 @@ impl Chunk {
     ) {
         if let Some(mesh) = &self.mesh {
             let model = [
-                [1.0, 0.0, 0.0, 0.0],
-                [0.0, 1.0, 0.0, 0.0],
-                [0.0, 0.0, 1.0, 0.0],
+                [2.0, 0.0, 0.0, 0.0],
+                [0.0, 2.0, 0.0, 0.0],
+                [0.0, 0.0, 2.0, 0.0],
                 [
                     (self.chunk_x * CHUNK_SIZE as i32) as f32,
                     (self.chunk_y * CHUNK_SIZE as i32) as f32,
@@ -356,6 +379,31 @@ impl Chunk {
                     params,
                 )
                 .unwrap();
+        }
+    }
+
+    pub fn invalidate_mesh(&mut self) {
+        self.mesh = None;
+    }
+}
+
+pub enum ChunkWaiter {
+    Timestamp(u128),
+    Chunk(Chunk),
+}
+
+impl ChunkWaiter {
+    pub fn chunk(&self) -> Option<&Chunk> {
+        match self {
+            ChunkWaiter::Timestamp(_) => None,
+            ChunkWaiter::Chunk(chunk) => Some(chunk),
+        }
+    }
+
+    pub fn timestamp(&self) -> Option<u128> {
+        match self {
+            ChunkWaiter::Timestamp(ts) => Some(*ts),
+            ChunkWaiter::Chunk(_) => None,
         }
     }
 }

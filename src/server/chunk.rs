@@ -29,7 +29,7 @@ impl ChunkGenerator for PerlinChunkGenerator {
                 let y = y as f64;
                 for (z, block) in line.iter_mut().enumerate() {
                     let z = z as f64;
-                    if self.0.get([(chunk_x * 16.0 + x) / 10.0, (chunk_y * 16.0 + y) / 10.0, (chunk_z * 16.0 + z) / 10.0]) > 0.1 {
+                    if self.0.get([(chunk_x * 16.0 + x) / 20.0, (chunk_y * 16.0 + y) / 20.0, (chunk_z * 16.0 + z) / 20.0]) > 0.1 {
                         *block = Block::Solid;
                     }
                 }

@@ -38,6 +38,7 @@ async fn main() -> io::Result<()> {
 
 async fn chunk_generator(tx: mpsc::Sender<(SocketAddr, ServerPacket)>, mut rx: mpsc::Receiver<(SocketAddr, UserPacket)>, chunks: Arc<Mutex<HashMap<(i32, i32, i32), Chunk>>>) {
     let mut gen = PerlinChunkGenerator::default();
+    let mut i = 0;
 
     while let Some((addr, packet)) = rx.recv().await {
         match packet {
@@ -58,6 +59,8 @@ async fn chunk_generator(tx: mpsc::Sender<(SocketAddr, ServerPacket)>, mut rx: m
                     Entry::Vacant(e) => {
                         let chunk = Chunk::new(x, y, z, &mut gen);
                         e.insert(chunk.clone());
+                        i += 1;
+                        println!("generated {} chunks", i);
                         tx.send((addr, ServerPacket::NewChunk { chunk })).await.unwrap();
                     }
                 }
@@ -69,14 +72,18 @@ async fn chunk_generator(tx: mpsc::Sender<(SocketAddr, ServerPacket)>, mut rx: m
 async fn transmitting(mut rx: mpsc::Receiver<(SocketAddr, ServerPacket)>, sock: Arc<UdpSocket>) -> io::Result<()> {
     while let Some((addr, packet)) = rx.recv().await {
         let buf = bincode::serialize(&packet).unwrap();
-        sock.send_to(&buf, addr).await?;
+        let send = sock.send_to(&buf, addr).await;
+        if let Err(err) = send {
+            println!("{:?} {}", err, buf.len());
+            return Err(err);
+        }
     }
 
     Ok(())
 }
 
 async fn receiving(packet_tx: mpsc::Sender<(SocketAddr, ServerPacket)>, sock: Arc<UdpSocket>, players: Arc<Mutex<HashMap<SocketAddr, Player>>>, mut player_names: HashSet<String>, chunk_tx: mpsc::Sender<(SocketAddr, UserPacket)>) -> io::Result<()> {
-    let mut buf = Box::new([0; 1024]);
+    let mut buf = Box::new([0; 4096]);
 
     loop {
         let (len, addr) = sock.recv_from(&mut *buf).await?;

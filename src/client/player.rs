@@ -55,9 +55,9 @@ impl Player {
             .draw(
                 (&self.positions, &self.tex_coords, &self.normals),
                 &self.indices,
-                &program,
+                program,
                 &uniforms,
-                &params,
+                params,
             )
             .unwrap();
     }

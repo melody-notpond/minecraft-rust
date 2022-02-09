@@ -16,7 +16,7 @@ use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
 
 use minecraft_rust::client::camera::Camera;
-use minecraft_rust::client::chunk::Chunk;
+use minecraft_rust::client::chunk::{Chunk, ChunkWaiter};
 use minecraft_rust::packet::{ServerPacket, UserPacket};
 use minecraft_rust::client::player::Player;
 
@@ -63,9 +63,17 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
         ..Default::default()
     };
 
-    let mut camera = Camera::new(10.0, 0.01, 90.0);
+    let mut camera = Camera::new(50.0, 0.01, 90.0);
     let mut chunks = HashMap::new();
     let mut players = HashMap::new();
+
+    for x in -2..=2 {
+        for y in -2..=2 {
+            for z in -2..=2 {
+                chunks.insert((x, y, z), ChunkWaiter::Timestamp(0));
+            }
+        }
+    }
 
     let mut last = Instant::now();
     event_loop.run(move |event, _, control_flow| {
@@ -156,7 +164,28 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
                 }
 
                 ServerPacket::NewChunk { chunk } => {
-                    chunks.insert((chunk.get_chunk_x(), chunk.get_chunk_y(), chunk.get_chunk_z()), Chunk::from_server_chunk(chunk));
+                    let coords = (chunk.get_chunk_x(), chunk.get_chunk_y(), chunk.get_chunk_z());
+                    chunks.insert(coords, ChunkWaiter::Chunk(Chunk::from_server_chunk(chunk)));
+                    let (x, y, z) = coords;
+
+                    if let Some(ChunkWaiter::Chunk(chunk)) = chunks.get_mut(&(x - 1, y, z)) {
+                        chunk.invalidate_mesh();
+                    }
+                    if let Some(ChunkWaiter::Chunk(chunk)) = chunks.get_mut(&(x + 1, y, z)) {
+                        chunk.invalidate_mesh();
+                    }
+                    if let Some(ChunkWaiter::Chunk(chunk)) = chunks.get_mut(&(x, y - 1, z)) {
+                        chunk.invalidate_mesh();
+                    }
+                    if let Some(ChunkWaiter::Chunk(chunk)) = chunks.get_mut(&(x, y + 1, z)) {
+                        chunk.invalidate_mesh();
+                    }
+                    if let Some(ChunkWaiter::Chunk(chunk)) = chunks.get_mut(&(x, y, z - 1)) {
+                        chunk.invalidate_mesh();
+                    }
+                    if let Some(ChunkWaiter::Chunk(chunk)) = chunks.get_mut(&(x, y, z + 1)) {
+                        chunk.invalidate_mesh();
+                    }
                 }
             }
         }
@@ -176,11 +205,23 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
         keys.extend(chunks.keys());
         for key in keys.iter() {
             let mut chunk = chunks.remove(key).unwrap();
-            chunk.generate_mesh(&display, &chunks);
-            chunk.render(&mut target, &program, perspective, view, &params);
+            if let ChunkWaiter::Chunk(chunk) = &mut chunk {
+                chunk.generate_mesh(&display, &chunks);
+                chunk.render(&mut target, &program, perspective, view, &params);
+            }
             chunks.insert(*key, chunk);
         }
         keys.clear();
+
+        let timestamp = SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        for ((x, y, z), chunk) in chunks.iter_mut() {
+            if let Some(stamp) = chunk.timestamp() {
+                if timestamp - stamp > 100_000 {
+                    *chunk = ChunkWaiter::Timestamp(timestamp);
+                    let _ = tx.try_send(UserPacket::RequestChunk { x: *x, y: *y, z: *z });
+                }
+            }
+        }
 
         for (_, player) in players.iter() {
             player.render(&mut target, &program, perspective, view, &params);
@@ -215,7 +256,6 @@ async fn transmitting(mut rx: mpsc::Receiver<UserPacket>, sock: Arc<UdpSocket>) 
 
 async fn receiving(tx: mpsc::Sender<UserPacket>, sock: Arc<UdpSocket>, recv_tx: mpsc::Sender<ServerPacket>) -> std::io::Result<()> {
     let mut buf = Box::new([0; 2usize.pow(20)]);
-
     loop {
         let len = sock.recv(&mut *buf).await?;
         let packet: ServerPacket = bincode::deserialize(&buf[..len]).unwrap();
@@ -224,14 +264,6 @@ async fn receiving(tx: mpsc::Sender<UserPacket>, sock: Arc<UdpSocket>, recv_tx: 
             ServerPacket::ConnectionAccepted => {
                 println!("Connected to server!");
                 tokio::spawn(ping(tx.clone()));
-                tx.send(UserPacket::RequestChunk { x: 0, y: 0, z: 0 }).await.unwrap();
-                tx.send(UserPacket::RequestChunk { x: 1, y: 0, z: 0 }).await.unwrap();
-                tx.send(UserPacket::RequestChunk { x: 0, y: 0, z: 1 }).await.unwrap();
-                tx.send(UserPacket::RequestChunk { x: 1, y: 0, z: 1 }).await.unwrap();
-                tx.send(UserPacket::RequestChunk { x: 0, y: 1, z: 0 }).await.unwrap();
-                tx.send(UserPacket::RequestChunk { x: 1, y: 1, z: 0 }).await.unwrap();
-                tx.send(UserPacket::RequestChunk { x: 0, y: 1, z: 1 }).await.unwrap();
-                tx.send(UserPacket::RequestChunk { x: 1, y: 1, z: 1 }).await.unwrap();
             }
 
             ServerPacket::Disconnected { reason } => {
