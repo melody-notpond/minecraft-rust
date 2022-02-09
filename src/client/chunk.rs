@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use glium::index::PrimitiveType;
 use glium::{Display, DrawParameters, Frame, IndexBuffer, Program, Surface, VertexBuffer};
 
 use super::shapes::{Normal, Position, TexCoord};
@@ -14,25 +15,39 @@ const NORM_UP: Normal = Normal {
     normal: [0.0, 1.0, 0.0],
 };
 
-const NORM_DOWN: Normal = Normal {
-    normal: [0.0, -1.0, 0.0],
-};
+pub const SQUARE_POSITIONS: [Position; 4] = [
+    Position {
+        position: [-0.25, 0.25, -0.25],
+    },
+    Position {
+        position: [-0.25, 0.25, 0.25],
+    },
+    Position {
+        position: [0.25, 0.25, -0.25],
+    },
+    Position {
+        position: [0.25, 0.25, 0.25],
+    },
+];
 
-const NORM_FRONT: Normal = Normal {
-    normal: [1.0, 0.0, 0.0],
-};
+pub const SQUARE_TEX_COORDS: [TexCoord; 4] = [
+    TEX_COORDS_EMPTY,
+    TEX_COORDS_EMPTY,
+    TEX_COORDS_EMPTY,
+    TEX_COORDS_EMPTY,
+];
 
-const NORM_BACK: Normal = Normal {
-    normal: [-1.0, 0.0, 0.0],
-};
+pub const SQUARE_NORMALS: [Normal; 4] = [
+    NORM_UP,
+    NORM_UP,
+    NORM_UP,
+    NORM_UP,
+];
 
-const NORM_LEFT: Normal = Normal {
-    normal: [0.0, 0.0, 1.0],
-};
-
-const NORM_RIGHT: Normal = Normal {
-    normal: [0.0, 0.0, -1.0],
-};
+pub const SQUARE_INDICES: [u32; 6] = [
+    0, 2, 1,
+    1, 2, 3,
+];
 
 #[derive(Debug)]
 pub struct Mesh {
@@ -42,14 +57,108 @@ pub struct Mesh {
     indices: IndexBuffer<u32>,
 }
 
+impl Mesh {
+    pub fn square(display: &Display) -> Mesh {
+        let positions = VertexBuffer::new(display, &SQUARE_POSITIONS).unwrap();
+        let tex_coords = VertexBuffer::new(display, &SQUARE_TEX_COORDS).unwrap();
+        let normals = VertexBuffer::new(display, &SQUARE_NORMALS).unwrap();
+        let indices = IndexBuffer::new(
+            display,
+            PrimitiveType::TrianglesList,
+            &SQUARE_INDICES,
+        )
+        .unwrap();
+
+        Mesh {
+            positions,
+            tex_coords,
+            normals,
+            indices,
+        }
+    }
+}
+
+#[repr(i32)]
+enum FaceDirection {
+    Up = 0,
+    Down = 1,
+    Front = 2,
+    Back = 3,
+    Left = 4,
+    Right = 5,
+}
+
+#[derive(Debug, Copy, Clone)]
+struct InstanceData {
+    /// 0..2   = FaceDirection
+    /// 3..3   = nothing
+    /// 4..7   = x
+    /// 8..11  = y
+    /// 12..15 = z
+    data: u32,
+}
+
+implement_vertex!(InstanceData, data);
+
+impl InstanceData {
+    fn new(dir: FaceDirection, x: u32, y: u32, z: u32) -> InstanceData {
+        let mut data = InstanceData { data: 0 };
+        data.set_direction(dir);
+        data.set_x(x);
+        data.set_y(y);
+        data.set_z(z);
+        data
+    }
+
+    fn _direction(&self) -> FaceDirection {
+        match self.data & 0x000f {
+            0 => FaceDirection::Up,
+            1 => FaceDirection::Down,
+            2 => FaceDirection::Front,
+            3 => FaceDirection::Back,
+            4 => FaceDirection::Left,
+            5 => FaceDirection::Right,
+
+            _ => unreachable!(),
+        }
+    }
+
+    fn set_direction(&mut self, dir: FaceDirection) {
+        self.data = (self.data & !0x000f) | dir as u32;
+    }
+
+    fn _x(&self) -> u32 {
+        (self.data & 0x00f0) >> 4
+    }
+
+    fn set_x(&mut self, x: u32) {
+        self.data = (self.data & !0x00f0) | (x << 4);
+    }
+
+    fn _y(&self) -> u32 {
+        (self.data & 0x0f00) >> 8
+    }
+
+    fn set_y(&mut self, y: u32) {
+        self.data = (self.data & !0x0f00) | (y << 8);
+    }
+
+    fn _z(&self) -> u32 {
+        (self.data & 0xf000) >> 12
+    }
+
+    fn set_z(&mut self, z: u32) {
+        self.data = (self.data & !0xf000) | (z << 12);
+    }
+}
+
 #[derive(Debug)]
 pub struct Chunk {
     chunk_x: i32,
     chunk_y: i32,
     chunk_z: i32,
     blocks: Box<[[[Block; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]>,
-
-    mesh: Option<Box<Mesh>>,
+    mesh: Option<Box<VertexBuffer<InstanceData>>>,
 }
 
 impl Chunk {
@@ -85,10 +194,7 @@ impl Chunk {
             return false;
         }
 
-        let mut positions = vec![];
-        let mut tex_coords = vec![];
-        let mut normals = vec![];
-        let mut indices = vec![];
+        let mut instance_data = vec![];
 
         for x in 0..CHUNK_SIZE {
             for y in 0..CHUNK_SIZE {
@@ -98,248 +204,34 @@ impl Chunk {
                     let z = z as isize;
                     if *self.get_block(chunks, x, y, z) == Block::Solid {
                         if *self.get_block(chunks, x, y + 1, z) == Block::Air {
-                            let x = x as f32 * 0.5;
-                            let y = y as f32 * 0.5;
-                            let z = z as f32 * 0.5;
-
-                            let i = positions.len() as u32;
-                            positions.push(Position {
-                                position: [x as f32, y as f32 + 0.5, z as f32],
-                            });
-                            positions.push(Position {
-                                position: [x as f32, y as f32 + 0.5, z as f32 + 0.5],
-                            });
-                            positions.push(Position {
-                                position: [x as f32 + 0.5, y as f32 + 0.5, z as f32],
-                            });
-                            positions.push(Position {
-                                position: [x as f32 + 0.5, y as f32 + 0.5, z as f32 + 0.5],
-                            });
-
-                            tex_coords.push(TEX_COORDS_EMPTY);
-                            tex_coords.push(TEX_COORDS_EMPTY);
-                            tex_coords.push(TEX_COORDS_EMPTY);
-                            tex_coords.push(TEX_COORDS_EMPTY);
-
-                            normals.push(NORM_UP);
-                            normals.push(NORM_UP);
-                            normals.push(NORM_UP);
-                            normals.push(NORM_UP);
-
-                            indices.push(i);
-                            indices.push(i + 2);
-                            indices.push(i + 1);
-                            indices.push(i + 1);
-                            indices.push(i + 2);
-                            indices.push(i + 3);
+                            instance_data.push(InstanceData::new(FaceDirection::Up, x as u32, y as u32, z as u32));
                         }
 
                         if *self.get_block(chunks, x, y - 1, z) == Block::Air {
-                            let x = x as f32 * 0.5;
-                            let y = y as f32 * 0.5;
-                            let z = z as f32 * 0.5;
-
-                            let i = positions.len() as u32;
-                            positions.push(Position {
-                                position: [x as f32, y as f32, z as f32],
-                            });
-                            positions.push(Position {
-                                position: [x as f32, y as f32, z as f32 + 0.5],
-                            });
-                            positions.push(Position {
-                                position: [x as f32 + 0.5, y as f32, z as f32],
-                            });
-                            positions.push(Position {
-                                position: [x as f32 + 0.5, y as f32, z as f32 + 0.5],
-                            });
-
-                            tex_coords.push(TEX_COORDS_EMPTY);
-                            tex_coords.push(TEX_COORDS_EMPTY);
-                            tex_coords.push(TEX_COORDS_EMPTY);
-                            tex_coords.push(TEX_COORDS_EMPTY);
-
-                            normals.push(NORM_DOWN);
-                            normals.push(NORM_DOWN);
-                            normals.push(NORM_DOWN);
-                            normals.push(NORM_DOWN);
-
-                            indices.push(i);
-                            indices.push(i + 1);
-                            indices.push(i + 2);
-                            indices.push(i + 1);
-                            indices.push(i + 3);
-                            indices.push(i + 2);
+                            instance_data.push(InstanceData::new(FaceDirection::Down, x as u32, y as u32, z as u32));
                         }
 
                         if *self.get_block(chunks, x + 1, y, z) == Block::Air {
-                            let x = x as f32 * 0.5;
-                            let y = y as f32 * 0.5;
-                            let z = z as f32 * 0.5;
-
-                            let i = positions.len() as u32;
-                            positions.push(Position {
-                                position: [x as f32 + 0.5, y as f32, z as f32],
-                            });
-                            positions.push(Position {
-                                position: [x as f32 + 0.5, y as f32, z as f32 + 0.5],
-                            });
-                            positions.push(Position {
-                                position: [x as f32 + 0.5, y as f32 + 0.5, z as f32],
-                            });
-                            positions.push(Position {
-                                position: [x as f32 + 0.5, y as f32 + 0.5, z as f32 + 0.5],
-                            });
-
-                            tex_coords.push(TEX_COORDS_EMPTY);
-                            tex_coords.push(TEX_COORDS_EMPTY);
-                            tex_coords.push(TEX_COORDS_EMPTY);
-                            tex_coords.push(TEX_COORDS_EMPTY);
-
-                            normals.push(NORM_FRONT);
-                            normals.push(NORM_FRONT);
-                            normals.push(NORM_FRONT);
-                            normals.push(NORM_FRONT);
-
-                            indices.push(i);
-                            indices.push(i + 1);
-                            indices.push(i + 2);
-                            indices.push(i + 1);
-                            indices.push(i + 3);
-                            indices.push(i + 2);
+                            instance_data.push(InstanceData::new(FaceDirection::Front, x as u32, y as u32, z as u32));
                         }
 
                         if *self.get_block(chunks, x - 1, y, z) == Block::Air {
-                            let x = x as f32 * 0.5;
-                            let y = y as f32 * 0.5;
-                            let z = z as f32 * 0.5;
-
-                            let i = positions.len() as u32;
-                            positions.push(Position {
-                                position: [x as f32, y as f32, z as f32],
-                            });
-                            positions.push(Position {
-                                position: [x as f32, y as f32, z as f32 + 0.5],
-                            });
-                            positions.push(Position {
-                                position: [x as f32, y as f32 + 0.5, z as f32],
-                            });
-                            positions.push(Position {
-                                position: [x as f32, y as f32 + 0.5, z as f32 + 0.5],
-                            });
-
-                            tex_coords.push(TEX_COORDS_EMPTY);
-                            tex_coords.push(TEX_COORDS_EMPTY);
-                            tex_coords.push(TEX_COORDS_EMPTY);
-                            tex_coords.push(TEX_COORDS_EMPTY);
-
-                            normals.push(NORM_BACK);
-                            normals.push(NORM_BACK);
-                            normals.push(NORM_BACK);
-                            normals.push(NORM_BACK);
-
-                            indices.push(i);
-                            indices.push(i + 2);
-                            indices.push(i + 1);
-                            indices.push(i + 1);
-                            indices.push(i + 2);
-                            indices.push(i + 3);
+                            instance_data.push(InstanceData::new(FaceDirection::Back, x as u32, y as u32, z as u32));
                         }
 
                         if *self.get_block(chunks, x, y, z + 1) == Block::Air {
-                            let x = x as f32 * 0.5;
-                            let y = y as f32 * 0.5;
-                            let z = z as f32 * 0.5;
-
-                            let i = positions.len() as u32;
-                            positions.push(Position {
-                                position: [x as f32, y as f32, z as f32 + 0.5],
-                            });
-                            positions.push(Position {
-                                position: [x as f32, y as f32 + 0.5, z as f32 + 0.5],
-                            });
-                            positions.push(Position {
-                                position: [x as f32 + 0.5, y as f32, z as f32 + 0.5],
-                            });
-                            positions.push(Position {
-                                position: [x as f32 + 0.5, y as f32 + 0.5, z as f32 + 0.5],
-                            });
-
-                            tex_coords.push(TEX_COORDS_EMPTY);
-                            tex_coords.push(TEX_COORDS_EMPTY);
-                            tex_coords.push(TEX_COORDS_EMPTY);
-                            tex_coords.push(TEX_COORDS_EMPTY);
-
-                            normals.push(NORM_LEFT);
-                            normals.push(NORM_LEFT);
-                            normals.push(NORM_LEFT);
-                            normals.push(NORM_LEFT);
-
-                            indices.push(i);
-                            indices.push(i + 1);
-                            indices.push(i + 2);
-                            indices.push(i + 1);
-                            indices.push(i + 3);
-                            indices.push(i + 2);
+                            instance_data.push(InstanceData::new(FaceDirection::Left, x as u32, y as u32, z as u32));
                         }
 
                         if *self.get_block(chunks, x, y, z - 1) == Block::Air {
-                            let x = x as f32 * 0.5;
-                            let y = y as f32 * 0.5;
-                            let z = z as f32 * 0.5;
-
-                            let i = positions.len() as u32;
-                            positions.push(Position {
-                                position: [x as f32, y as f32, z as f32],
-                            });
-                            positions.push(Position {
-                                position: [x as f32, y as f32 + 0.5, z as f32],
-                            });
-                            positions.push(Position {
-                                position: [x as f32 + 0.5, y as f32, z as f32],
-                            });
-                            positions.push(Position {
-                                position: [x as f32 + 0.5, y as f32 + 0.5, z as f32],
-                            });
-
-                            tex_coords.push(TEX_COORDS_EMPTY);
-                            tex_coords.push(TEX_COORDS_EMPTY);
-                            tex_coords.push(TEX_COORDS_EMPTY);
-                            tex_coords.push(TEX_COORDS_EMPTY);
-
-                            normals.push(NORM_RIGHT);
-                            normals.push(NORM_RIGHT);
-                            normals.push(NORM_RIGHT);
-                            normals.push(NORM_RIGHT);
-
-                            indices.push(i);
-                            indices.push(i + 2);
-                            indices.push(i + 1);
-                            indices.push(i + 1);
-                            indices.push(i + 2);
-                            indices.push(i + 3);
+                            instance_data.push(InstanceData::new(FaceDirection::Right, x as u32, y as u32, z as u32));
                         }
                     }
                 }
             }
         }
 
-        let positions = VertexBuffer::new(display, &positions).unwrap();
-        let tex_coords = VertexBuffer::new(display, &tex_coords).unwrap();
-        let normals = VertexBuffer::new(display, &normals).unwrap();
-        let indices = IndexBuffer::new(
-            display,
-            glium::index::PrimitiveType::TrianglesList,
-            &indices,
-        )
-        .unwrap();
-
-        self.mesh = Some(Box::new(Mesh {
-            positions,
-            tex_coords,
-            normals,
-            indices,
-        }));
-
+        self.mesh = Some(Box::new(VertexBuffer::new(display, &instance_data).unwrap()));
         true
     }
 
@@ -350,16 +242,17 @@ impl Chunk {
         perspective: [[f32; 4]; 4],
         view: [[f32; 4]; 4],
         params: &DrawParameters,
+        square: &Mesh,
     ) {
-        if let Some(mesh) = &self.mesh {
+        if let Some(data) = &self.mesh {
             let model = [
-                [2.0, 0.0, 0.0, 0.0],
-                [0.0, 2.0, 0.0, 0.0],
-                [0.0, 0.0, 2.0, 0.0],
+                [1.0, 0.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0, 0.0],
+                [0.0, 0.0, 1.0, 0.0],
                 [
-                    (self.chunk_x * CHUNK_SIZE as i32) as f32,
-                    (self.chunk_y * CHUNK_SIZE as i32) as f32,
-                    (self.chunk_z * CHUNK_SIZE as i32) as f32,
+                    (self.chunk_x * CHUNK_SIZE as i32) as f32 * 0.5,
+                    (self.chunk_y * CHUNK_SIZE as i32) as f32 * 0.5,
+                    (self.chunk_z * CHUNK_SIZE as i32) as f32 * 0.5,
                     1.0,
                 ],
             ];
@@ -374,8 +267,8 @@ impl Chunk {
 
             target
                 .draw(
-                    (&mesh.positions, &mesh.tex_coords, &mesh.normals),
-                    &mesh.indices,
+                    (&square.positions, &square.tex_coords, &square.normals, data.per_instance().unwrap()),
+                    &square.indices,
                     program,
                     &uniforms,
                     params,

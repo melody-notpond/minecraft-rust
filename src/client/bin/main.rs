@@ -16,7 +16,7 @@ use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
 
 use minecraft_rust::client::camera::Camera;
-use minecraft_rust::client::chunk::{Chunk, ChunkWaiter};
+use minecraft_rust::client::chunk::{Chunk, ChunkWaiter, Mesh};
 use minecraft_rust::packet::{ServerPacket, UserPacket};
 use minecraft_rust::client::player::Player;
 
@@ -66,6 +66,7 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
     let mut camera = Camera::new(50.0, 0.01, 90.0);
     let mut chunks = HashMap::new();
     let mut players = HashMap::new();
+    let square = Mesh::square(&display);
 
     for x in -5..=5 {
         for y in -5..=5 {
@@ -210,7 +211,7 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
                 if chunk.generate_mesh(&display, &chunks) {
                     changed += 1;
                 }
-                chunk.render(&mut target, &program, perspective, view, &params);
+                chunk.render(&mut target, &program, perspective, view, &params, &square);
             }
             chunks.insert(*key, chunk);
 
@@ -233,6 +234,7 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
         for (_, player) in players.iter() {
             player.render(&mut target, &program, perspective, view, &params);
         }
+
 
         target.finish().unwrap();
 
