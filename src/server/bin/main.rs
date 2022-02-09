@@ -36,6 +36,7 @@ async fn main() -> io::Result<()> {
     Ok(())
 }
 
+#[allow(clippy::type_complexity)]
 async fn chunk_generator(tx: mpsc::Sender<(SocketAddr, ServerPacket)>, mut rx: mpsc::Receiver<(SocketAddr, UserPacket)>, chunks: Arc<Mutex<HashMap<(i32, i32, i32), Chunk>>>) {
     let mut gen = PerlinChunkGenerator::default();
     let mut i = 0;
