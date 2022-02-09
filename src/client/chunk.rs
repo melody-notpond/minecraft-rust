@@ -1,21 +1,20 @@
 use std::collections::HashMap;
+use std::io::Cursor;
 
 use glium::index::PrimitiveType;
+use glium::texture::{SrgbTexture3d, RawImage3d, RawImage2d};
 use glium::{Display, DrawParameters, Frame, IndexBuffer, Program, Surface, VertexBuffer};
+use image::ImageFormat;
 
 use super::shapes::{Normal, Position, TexCoord};
 use super::super::blocks::{Block, CHUNK_SIZE};
 use super::super::server::chunk::Chunk as ServerChunk;
 
-const TEX_COORDS_EMPTY: TexCoord = TexCoord {
-    tex_coords: [0.0, 0.0],
-};
-
 const NORM_UP: Normal = Normal {
     normal: [0.0, 1.0, 0.0],
 };
 
-pub const SQUARE_POSITIONS: [Position; 4] = [
+const SQUARE_POSITIONS: [Position; 4] = [
     Position {
         position: [-0.25, 0.25, -0.25],
     },
@@ -30,21 +29,29 @@ pub const SQUARE_POSITIONS: [Position; 4] = [
     },
 ];
 
-pub const SQUARE_TEX_COORDS: [TexCoord; 4] = [
-    TEX_COORDS_EMPTY,
-    TEX_COORDS_EMPTY,
-    TEX_COORDS_EMPTY,
-    TEX_COORDS_EMPTY,
+const SQUARE_TEX_COORDS: [TexCoord; 4] = [
+    TexCoord {
+        tex_coords: [0.0, 0.0],
+    },
+    TexCoord {
+        tex_coords: [0.0, 1.0],
+    },
+    TexCoord {
+        tex_coords: [1.0, 0.0],
+    },
+    TexCoord {
+        tex_coords: [1.0, 1.0],
+    },
 ];
 
-pub const SQUARE_NORMALS: [Normal; 4] = [
+const SQUARE_NORMALS: [Normal; 4] = [
     NORM_UP,
     NORM_UP,
     NORM_UP,
     NORM_UP,
 ];
 
-pub const SQUARE_INDICES: [u32; 6] = [
+const SQUARE_INDICES: [u32; 6] = [
     0, 2, 1,
     1, 2, 3,
 ];
@@ -78,6 +85,25 @@ impl Mesh {
     }
 }
 
+pub struct BlockTextures {
+    textures: SrgbTexture3d,
+}
+
+impl BlockTextures {
+    pub fn generate_textures(display: &Display) -> BlockTextures {
+        let mut textures = vec![];
+        let texture = image::load(Cursor::new(&include_bytes!("../../assets/textures/PNG/Tiles/dirt_grass.png")), ImageFormat::Png).unwrap().to_rgba8();
+        let dims = texture.dimensions();
+        let texture = RawImage2d::from_raw_rgba_reversed(&texture.into_raw(), dims);
+        textures.push(texture);
+        let textures = RawImage3d::from_vec_raw2d(&textures);
+        let textures = SrgbTexture3d::new(display, textures).unwrap();
+        BlockTextures {
+            textures
+        }
+    }
+}
+
 #[repr(i32)]
 enum FaceDirection {
     Up = 0,
@@ -95,14 +121,16 @@ struct InstanceData {
     /// 4..7   = x
     /// 8..11  = y
     /// 12..15 = z
-    data: u32,
+    /// 32..63 = texture map
+    data: (u32, u32),
+
 }
 
 implement_vertex!(InstanceData, data);
 
 impl InstanceData {
     fn new(dir: FaceDirection, x: u32, y: u32, z: u32) -> InstanceData {
-        let mut data = InstanceData { data: 0 };
+        let mut data = InstanceData { data: (0, 0) };
         data.set_direction(dir);
         data.set_x(x);
         data.set_y(y);
@@ -111,7 +139,7 @@ impl InstanceData {
     }
 
     fn _direction(&self) -> FaceDirection {
-        match self.data & 0x000f {
+        match self.data.0 & 0x000f {
             0 => FaceDirection::Up,
             1 => FaceDirection::Down,
             2 => FaceDirection::Front,
@@ -124,31 +152,31 @@ impl InstanceData {
     }
 
     fn set_direction(&mut self, dir: FaceDirection) {
-        self.data = (self.data & !0x000f) | dir as u32;
+        self.data.0 = (self.data.0 & !0x000f) | dir as u32;
     }
 
     fn _x(&self) -> u32 {
-        (self.data & 0x00f0) >> 4
+        (self.data.0 & 0x00f0) >> 4
     }
 
     fn set_x(&mut self, x: u32) {
-        self.data = (self.data & !0x00f0) | (x << 4);
+        self.data.0 = (self.data.0 & !0x00f0) | (x << 4);
     }
 
     fn _y(&self) -> u32 {
-        (self.data & 0x0f00) >> 8
+        (self.data.0 & 0x0f00) >> 8
     }
 
     fn set_y(&mut self, y: u32) {
-        self.data = (self.data & !0x0f00) | (y << 8);
+        self.data.0 = (self.data.0 & !0x0f00) | (y << 8);
     }
 
     fn _z(&self) -> u32 {
-        (self.data & 0xf000) >> 12
+        (self.data.0 & 0xf000) >> 12
     }
 
     fn set_z(&mut self, z: u32) {
-        self.data = (self.data & !0xf000) | (z << 12);
+        self.data.0 = (self.data.0 & !0xf000) | (z << 12);
     }
 }
 
@@ -235,6 +263,7 @@ impl Chunk {
         true
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn render(
         &self,
         target: &mut Frame,
@@ -243,6 +272,7 @@ impl Chunk {
         view: [[f32; 4]; 4],
         params: &DrawParameters,
         square: &Mesh,
+        textures: &BlockTextures,
     ) {
         if let Some(data) = &self.mesh {
             let model = [
@@ -262,7 +292,7 @@ impl Chunk {
                 view: view,
                 perspective: perspective,
                 light: [-1.0, 0.4, 0.9f32],
-                colour: [1.0, 0.0, 0.0f32],
+                textures: &textures.textures,
             };
 
             target
