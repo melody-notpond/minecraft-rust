@@ -7,6 +7,9 @@ use glium::uniforms::{Sampler, MinifySamplerFilter, MagnifySamplerFilter};
 use glium::{Display, DrawParameters, Frame, IndexBuffer, Program, Surface, VertexBuffer};
 use image::ImageFormat;
 
+use crate::blocks::FaceDirection;
+
+use super::light::LightSource;
 use super::shapes::{Normal, Position, TexCoord};
 use super::super::blocks::{Block, CHUNK_SIZE};
 use super::super::server::chunk::Chunk as ServerChunk;
@@ -119,33 +122,6 @@ impl BlockTextures {
     }
 }
 
-#[repr(u32)]
-#[derive(Copy, Clone)]
-enum FaceDirection {
-    Up = 0,
-    Down = 1,
-    Front = 2,
-    Back = 3,
-    Left = 4,
-    Right = 5,
-}
-
-impl Block {
-    fn get_texture(&self, face: FaceDirection) -> u32 {
-        match self {
-            Block::Air => 0,
-
-            Block::Solid => {
-                match face {
-                    FaceDirection::Up => 1,
-                    FaceDirection::Down => 2,
-                    _ => 0,
-                }
-            }
-        }
-    }
-}
-
 #[derive(Debug, Copy, Clone)]
 struct InstanceData {
     /// 0..2   = FaceDirection
@@ -169,7 +145,7 @@ impl InstanceData {
         data
     }
 
-    fn _direction(&self) -> FaceDirection {
+    fn direction(&self) -> FaceDirection {
         match self.data.0 & 0x000f {
             0 => FaceDirection::Up,
             1 => FaceDirection::Down,
@@ -186,7 +162,7 @@ impl InstanceData {
         self.data.0 = (self.data.0 & !0x000f) | dir as u32;
     }
 
-    fn _x(&self) -> u32 {
+    fn x(&self) -> u32 {
         (self.data.0 & 0x00f0) >> 4
     }
 
@@ -194,7 +170,7 @@ impl InstanceData {
         self.data.0 = (self.data.0 & !0x00f0) | (x << 4);
     }
 
-    fn _y(&self) -> u32 {
+    fn y(&self) -> u32 {
         (self.data.0 & 0x0f00) >> 8
     }
 
@@ -202,12 +178,27 @@ impl InstanceData {
         self.data.0 = (self.data.0 & !0x0f00) | (y << 8);
     }
 
-    fn _z(&self) -> u32 {
+    fn z(&self) -> u32 {
         (self.data.0 & 0xf000) >> 12
     }
 
     fn set_z(&mut self, z: u32) {
         self.data.0 = (self.data.0 & !0xf000) | (z << 12);
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+struct Light {
+    light: u32,
+}
+
+implement_vertex!(Light, light);
+
+impl Light {
+    fn new(red: u32, green: u32, blue: u32, intensity: u32) -> Light {
+        Light {
+            light: ((red & 0xf) << 12) | ((green & 0xf) << 8) | ((blue & 0xf) << 4) | (intensity & 0xf)
+        }
     }
 }
 
@@ -217,7 +208,9 @@ pub struct Chunk {
     chunk_y: i32,
     chunk_z: i32,
     blocks: Box<[[[Block; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]>,
+    mesh_raw: Option<Vec<InstanceData>>,
     mesh: Option<Box<VertexBuffer<InstanceData>>>,
+    lights: Option<Box<VertexBuffer<Light>>>,
 }
 
 impl Chunk {
@@ -227,7 +220,9 @@ impl Chunk {
             chunk_y: chunk.get_chunk_y(),
             chunk_z: chunk.get_chunk_z(),
             blocks: Box::new(*chunk.get_blocks()),
+            mesh_raw: None,
             mesh: None,
+            lights: None,
         }
     }
 
@@ -249,7 +244,7 @@ impl Chunk {
     }
 
     pub fn generate_mesh(&mut self, display: &Display, chunks: &HashMap<(i32, i32, i32), ChunkWaiter>) -> bool {
-        if self.mesh.is_some() {
+        if self.mesh_raw.is_some() {
             return false;
         }
 
@@ -291,7 +286,33 @@ impl Chunk {
         }
 
         self.mesh = Some(Box::new(VertexBuffer::new(display, &instance_data).unwrap()));
+        self.mesh_raw = Some(instance_data);
         true
+    }
+
+    pub fn populate_lights(&mut self, display: &Display, lights: &[LightSource]) -> bool {
+        if self.lights.is_some() {
+            return false;
+        }
+
+        let light = lights.get(0).unwrap();
+
+        if let Some(mesh) = &self.mesh_raw {
+            let mut light_data = vec![];
+
+            for data in mesh {
+                let x = data.x() as i32;
+                let y = data.y() as i32;
+                let z = data.z() as i32;
+                let dir = data.direction();
+                light_data.push(Light::new(light.red() as u32, light.green() as u32, light.blue() as u32, light.calculate_light_intensity(self.chunk_x * CHUNK_SIZE as i32 + x, self.chunk_y * CHUNK_SIZE as i32 + y, self.chunk_z * CHUNK_SIZE as i32 + z, dir)));
+            }
+
+            self.lights = Some(Box::new(VertexBuffer::new(display, &light_data).unwrap()));
+            true
+        } else {
+            false
+        }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -306,41 +327,47 @@ impl Chunk {
         textures: &BlockTextures,
     ) {
         if let Some(data) = &self.mesh {
-            let model = [
-                [1.0, 0.0, 0.0, 0.0],
-                [0.0, 1.0, 0.0, 0.0],
-                [0.0, 0.0, 1.0, 0.0],
-                [
-                    (self.chunk_x * CHUNK_SIZE as i32) as f32 * 0.5,
-                    (self.chunk_y * CHUNK_SIZE as i32) as f32 * 0.5,
-                    (self.chunk_z * CHUNK_SIZE as i32) as f32 * 0.5,
-                    1.0,
-                ],
-            ];
+            if let Some(lights) = &self.lights {
+                let model = [
+                    [1.0, 0.0, 0.0, 0.0],
+                    [0.0, 1.0, 0.0, 0.0],
+                    [0.0, 0.0, 1.0, 0.0],
+                    [
+                        (self.chunk_x * CHUNK_SIZE as i32) as f32 * 0.5,
+                        (self.chunk_y * CHUNK_SIZE as i32) as f32 * 0.5,
+                        (self.chunk_z * CHUNK_SIZE as i32) as f32 * 0.5,
+                        1.0,
+                    ],
+                ];
 
-            let uniforms = uniform! {
-                model: model,
-                view: view,
-                perspective: perspective,
-                light: [-1.0, 0.4, 0.9f32],
-                textures: Sampler::new(&textures.textures).minify_filter(MinifySamplerFilter::Nearest).magnify_filter(MagnifySamplerFilter::Nearest),
-                texture_count: textures.texture_count,
-            };
+                let uniforms = uniform! {
+                    model: model,
+                    view: view,
+                    perspective: perspective,
+                    light: [-1.0, 0.4, 0.9f32],
+                    textures: Sampler::new(&textures.textures).minify_filter(MinifySamplerFilter::Nearest).magnify_filter(MagnifySamplerFilter::Nearest),
+                    texture_count: textures.texture_count,
+                };
 
-            target
-                .draw(
-                    (&square.positions, &square.tex_coords, &square.normals, data.per_instance().unwrap()),
-                    &square.indices,
-                    program,
-                    &uniforms,
-                    params,
-                )
-                .unwrap();
+                target
+                    .draw(
+                        (&square.positions, &square.tex_coords, &square.normals, data.per_instance().unwrap(), lights.per_instance().unwrap()),
+                        &square.indices,
+                        program,
+                        &uniforms,
+                        params,
+                    )
+                    .unwrap();
+            }
         }
     }
 
     pub fn invalidate_mesh(&mut self) {
-        self.mesh = None;
+        self.mesh_raw = None;
+    }
+
+    pub fn invalidate_lights(&mut self) {
+        self.lights = None;
     }
 }
 

@@ -4,6 +4,7 @@ in vec3 position;
 in vec2 tex_coords;
 in vec3 normal;
 in uvec2 data;
+in uint light;
 
 uniform mat4 model;
 uniform mat4 view;
@@ -12,6 +13,7 @@ uniform uint texture_count;
 
 out vec3 tex_coords_out;
 out vec3 normal_out;
+out vec4 light_out;
 
 void main() {
     float x = ((data.x & 0x00f0u) >>  4u) * 0.5;
@@ -116,6 +118,12 @@ void main() {
             );
             break;
     }
+
+    vec3 light_colour = vec3(((light & 0xf000u) >> 12) / 15.0, ((light & 0x0f00u) >> 8) / 15.0, ((light & 0x00f0u) >> 4) / 15.0) * (light & 0x000fu) / 15.0;
+    const float min_light = 0.0025;
+    light_colour *= vec3(1.0 - min_light);
+    light_colour += vec3(min_light);
+    light_out = vec4(pow(light_colour, vec3(1.0 / 2.2)), 1.0);
 
     mat4 model_view = view * new_model * face_rotation;
     normal_out = transpose(inverse(mat3(model_view))) * normal;

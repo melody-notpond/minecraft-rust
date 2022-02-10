@@ -12,6 +12,7 @@ use glium::glutin::{
     ContextBuilder,
 };
 use glium::{Display, Program, Surface};
+use minecraft_rust::client::light::LightSource;
 use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
 
@@ -65,6 +66,7 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
 
     let mut camera = Camera::new(50.0, 0.01, 90.0);
     let mut chunks = HashMap::new();
+    let mut lights = vec![LightSource::new(15, 0, 0, 15, camera.get_pos())];
     let mut players = HashMap::new();
     let square = Mesh::square(&display);
     let block_textures = BlockTextures::generate_textures(&display);
@@ -106,7 +108,9 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
                         window.set_cursor_grab(locked).unwrap();
                     }
 
-                    WindowEvent::KeyboardInput { input, .. } if locked && camera.move_self(input) => (),
+                    WindowEvent::KeyboardInput { input, .. } if locked && camera.move_self(input) => {
+                        //lights.get_mut(0).unwrap().set_location(camera.get_pos());
+                    }
 
                     WindowEvent::CursorMoved { position, .. } if locked => {
                         let gl_window = display.gl_window();
@@ -198,7 +202,7 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
         }
 
         let mut target = display.draw();
-        target.clear_color_and_depth((0.0, 1.0, 0.0, 1.0), 1.0);
+        target.clear_color_and_depth((0.53, 0.80, 0.92, 1.0), 1.0);
 
         let perspective = camera.perspective(&target);
 
@@ -206,11 +210,17 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
 
         let mut changed = 0;
         keys.extend(chunks.keys());
+        let lights_changed = lights.iter().any(LightSource::updated);
         for key in keys.iter() {
             let mut chunk = chunks.remove(key).unwrap();
             if let ChunkWaiter::Chunk(chunk) = &mut chunk {
                 if chunk.generate_mesh(&display, &chunks) {
                     changed += 1;
+                    chunk.invalidate_lights();
+                    chunk.populate_lights(&display, &lights);
+                } else if lights_changed {
+                    chunk.invalidate_lights();
+                    chunk.populate_lights(&display, &lights);
                 }
                 chunk.render(&mut target, &program, perspective, view, &params, &square, &block_textures);
             }
@@ -220,6 +230,13 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
                 break;
             }
         }
+
+        if lights_changed {
+            for light in lights.iter_mut() {
+                light.reset_updated();
+            }
+        }
+
         keys.clear();
 
         let timestamp = SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
