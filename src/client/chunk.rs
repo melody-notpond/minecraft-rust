@@ -290,12 +290,10 @@ impl Chunk {
         true
     }
 
-    pub fn populate_lights(&mut self, display: &Display, lights: &[LightSource]) -> bool {
+    pub fn populate_lights(&mut self, display: &Display, lights: &[LightSource]) {
         if self.lights.is_some() {
-            return false;
+            return;
         }
-
-        let light = lights.get(0).unwrap();
 
         if let Some(mesh) = &self.mesh_raw {
             let mut light_data = vec![];
@@ -305,13 +303,23 @@ impl Chunk {
                 let y = data.y() as i32;
                 let z = data.z() as i32;
                 let dir = data.direction();
-                light_data.push(Light::new(light.red() as u32, light.green() as u32, light.blue() as u32, light.calculate_light_intensity(self.chunk_x * CHUNK_SIZE as i32 + x, self.chunk_y * CHUNK_SIZE as i32 + y, self.chunk_z * CHUNK_SIZE as i32 + z, dir)));
+
+                let mut red = 0;
+                let mut green = 0;
+                let mut blue = 0;
+                let mut intensity = 0;
+
+                for light in lights {
+                    red += light.red();
+                    green += light.green();
+                    blue += light.blue();
+                    intensity += light.calculate_light_intensity(self.chunk_x * CHUNK_SIZE as i32 + x, self.chunk_y * CHUNK_SIZE as i32 + y, self.chunk_z * CHUNK_SIZE as i32 + z, dir);
+                }
+
+                light_data.push(Light::new(red as u32 & 0xf, green as u32 & 0xf, blue as u32 & 0xf, intensity & 0xf));
             }
 
             self.lights = Some(Box::new(VertexBuffer::new(display, &light_data).unwrap()));
-            true
-        } else {
-            false
         }
     }
 
@@ -344,7 +352,6 @@ impl Chunk {
                     model: model,
                     view: view,
                     perspective: perspective,
-                    light: [-1.0, 0.4, 0.9f32],
                     textures: Sampler::new(&textures.textures).minify_filter(MinifySamplerFilter::Nearest).magnify_filter(MagnifySamplerFilter::Nearest),
                     texture_count: textures.texture_count,
                 };

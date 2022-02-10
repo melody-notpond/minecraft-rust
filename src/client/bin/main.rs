@@ -64,9 +64,9 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
         ..Default::default()
     };
 
-    let mut camera = Camera::new(50.0, 0.01, 90.0);
+    let mut camera = Camera::new(50.0, 0.001, 90.0);
     let mut chunks = HashMap::new();
-    let mut lights = vec![LightSource::new(15, 0, 0, 15, camera.get_pos())];
+    let mut lights = vec![LightSource::new(15, 10, 10, 15, camera.get_pos())];
     let mut players = HashMap::new();
     let square = Mesh::square(&display);
     let block_textures = BlockTextures::generate_textures(&display);
@@ -79,7 +79,9 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
         }
     }
 
+    let mut frame_count = 0;
     let mut last = Instant::now();
+    let mut last_frame = last;
     event_loop.run(move |event, _, control_flow| {
         match event {
             Event::WindowEvent { event, .. } => {
@@ -108,9 +110,7 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
                         window.set_cursor_grab(locked).unwrap();
                     }
 
-                    WindowEvent::KeyboardInput { input, .. } if locked && camera.move_self(input) => {
-                        //lights.get_mut(0).unwrap().set_location(camera.get_pos());
-                    }
+                    WindowEvent::KeyboardInput { input, .. } if locked && camera.move_self(input) => (),
 
                     WindowEvent::CursorMoved { position, .. } if locked => {
                         let gl_window = display.gl_window();
@@ -133,6 +133,7 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
             Event::NewEvents(cause) => match cause {
                 StartCause::Init => {
                     last = Instant::now();
+                    last_frame = last;
                     let next_frame_time = last + Duration::from_nanos(16_666_667);
                     *control_flow = ControlFlow::WaitUntil(next_frame_time);
                     return;
@@ -144,6 +145,13 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
             },
 
             _ => return,
+        }
+
+        frame_count += 1;
+        if last - last_frame >= Duration::from_secs(1) {
+            println!("{} frames per second", frame_count);
+            frame_count = 0;
+            last_frame = last;
         }
 
         let delta = Instant::now() - last;
@@ -199,6 +207,11 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
         camera.tick(delta);
         if camera.is_moving() {
             let _ = tx.try_send(UserPacket::MoveSelf { pos: camera.get_pos() });
+            if let Some(light) = lights.get_mut(0) {
+                light.invalidate_chunk_lighting(&mut chunks);
+                light.set_location(camera.get_pos());
+                light.invalidate_chunk_lighting(&mut chunks);
+            }
         }
 
         let mut target = display.draw();
@@ -210,31 +223,18 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
 
         let mut changed = 0;
         keys.extend(chunks.keys());
-        let lights_changed = lights.iter().any(LightSource::updated);
         for key in keys.iter() {
             let mut chunk = chunks.remove(key).unwrap();
             if let ChunkWaiter::Chunk(chunk) = &mut chunk {
-                if chunk.generate_mesh(&display, &chunks) {
+                if changed < 50 && chunk.generate_mesh(&display, &chunks) {
                     changed += 1;
                     chunk.invalidate_lights();
-                    chunk.populate_lights(&display, &lights);
-                } else if lights_changed {
-                    chunk.invalidate_lights();
-                    chunk.populate_lights(&display, &lights);
                 }
+
+                chunk.populate_lights(&display, &lights);
                 chunk.render(&mut target, &program, perspective, view, &params, &square, &block_textures);
             }
             chunks.insert(*key, chunk);
-
-            if changed > 50 {
-                break;
-            }
-        }
-
-        if lights_changed {
-            for light in lights.iter_mut() {
-                light.reset_updated();
-            }
         }
 
         keys.clear();
@@ -252,7 +252,6 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
         for (_, player) in players.iter() {
             player.render(&mut target, &program, perspective, view, &params);
         }
-
 
         target.finish().unwrap();
 

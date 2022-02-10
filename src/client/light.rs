@@ -1,4 +1,8 @@
-use crate::blocks::FaceDirection;
+use std::collections::HashMap;
+
+use crate::blocks::{FaceDirection, CHUNK_SIZE};
+
+use super::chunk::ChunkWaiter;
 
 pub struct LightSource {
     red: u8,
@@ -18,6 +22,28 @@ impl LightSource {
             intensity,
             location,
             updated: true,
+        }
+    }
+
+    pub fn invalidate_chunk_lighting(&self, chunks: &mut HashMap<(i32, i32, i32), ChunkWaiter>) {
+        let (x, y, z) = ((self.location[0] * 2.0) as i32, (self.location[1] * 2.0) as i32, (self.location[2] * 2.0) as i32);
+        let (x, y, z) = (x / CHUNK_SIZE as i32, y / CHUNK_SIZE as i32, z / CHUNK_SIZE as i32);
+        for i in -3..=3 {
+            for j in -3..=3 {
+                for k in -3..=3 {
+                    let (chunk_x, chunk_y, chunk_z) = (x + i, y + j, z + k);
+                    let (x, y, z) = (chunk_x as f32 * CHUNK_SIZE as f32 * 0.5, chunk_y as f32 * CHUNK_SIZE as f32 * 0.5, chunk_z as f32 * CHUNK_SIZE as f32 * 0.5);
+
+                    if ((x - self.location[0]).abs() < 15.0 || (x + CHUNK_SIZE as f32 / 2.0 - self.location[0]).abs() < 15.0)
+                        && ((y - self.location[1]).abs() < 15.0 || (y + CHUNK_SIZE as f32 / 2.0 - self.location[1]).abs() < 15.0)
+                        && ((z - self.location[2]).abs() < 15.0 || (z + CHUNK_SIZE as f32 / 2.0 - self.location[2]).abs() < 15.0)
+                    {
+                        if let Some(ChunkWaiter::Chunk(chunk)) = chunks.get_mut(&(chunk_x, chunk_y, chunk_z)) {
+                            chunk.invalidate_lights();
+                        }
+                    }
+                }
+            }
         }
     }
 
