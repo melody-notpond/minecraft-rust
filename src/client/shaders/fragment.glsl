@@ -1,4 +1,4 @@
-#version 140
+#version 150
 
 in vec3 normal_out;
 in vec3 tex_coords_out;

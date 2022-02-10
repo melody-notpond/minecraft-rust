@@ -8,6 +8,7 @@ in uvec2 data;
 uniform mat4 model;
 uniform mat4 view;
 uniform mat4 perspective;
+uniform uint texture_count;
 
 out vec3 tex_coords_out;
 out vec3 normal_out;
@@ -23,7 +24,6 @@ void main() {
     new_model[3].z += z;
 
     mat4 face_rotation;
-    mat2 texture_rotation;
 
     switch (data.x & 0x000fu) {
         // up (+y)
@@ -34,10 +34,6 @@ void main() {
                 0.0, 0.0, 1.0, 0.0,
                 0.0, 0.0, 0.0, 1.0
             );
-            texture_rotation = mat2(
-                1.0, 0.0,
-                0.0, 1.0
-            );
             break;
 
         // down (-y)
@@ -47,10 +43,11 @@ void main() {
                 0.0, -1.0, 0.0, 0.0,
                 0.0, 0.0, -1.0, 0.0,
                 0.0, 0.0, 0.0, 1.0
-            );
-            texture_rotation = mat2(
-                -1.0, 0.0,
-                0.0, -1.0
+            ) * mat4(
+                -1.0, 0.0, 0.0, 0.0,
+                0.0, 1.0, 0.0, 0.0,
+                0.0, 0.0, -1.0, 0.0,
+                0.0, 0.0, 0.0, 1.0
             );
             break;
 
@@ -61,10 +58,11 @@ void main() {
                 1.0, 0.0, 0.0, 0.0,
                 0.0, 0.0, 1.0, 0.0,
                 0.0, 0.0, 0.0, 1.0
-            );
-            texture_rotation = mat2(
-                0.0, -1.0,
-                1.0, 0.0
+            ) * mat4(
+                0.0, 0.0, 1.0, 0.0,
+                0.0, 1.0, 0.0, 0.0,
+                -1.0, 0.0, 0.0, 0.0,
+                0.0, 0.0, 0.0, 1.0
             );
             break;
 
@@ -75,10 +73,11 @@ void main() {
                 -1.0, 0.0, 0.0, 0.0,
                 0.0, 0.0, 1.0, 0.0,
                 0.0, 0.0, 0.0, 1.0
-            );
-            texture_rotation = mat2(
-                0.0, 1.0,
-                -1.0, 0.0
+            ) * mat4(
+                0.0, 0.0, -1.0, 0.0,
+                0.0, 1.0, 0.0, 0.0,
+                1.0, 0.0, 0.0, 0.0,
+                0.0, 0.0, 0.0, 1.0
             );
             break;
 
@@ -89,10 +88,11 @@ void main() {
                 0.0, 0.0, 1.0, 0.0,
                 0.0, -1.0, 0.0, 0.0,
                 0.0, 0.0, 0.0, 1.0
-            );
-            texture_rotation = mat2(
-                -1.0, 0.0,
-                0.0, -1.0
+            ) * mat4(
+                -1.0, 0.0, 0.0, 0.0,
+                0.0, 1.0, 0.0, 0.0,
+                0.0, 0.0, -1.0, 0.0,
+                0.0, 0.0, 0.0, 1.0
             );
             break;
 
@@ -104,10 +104,6 @@ void main() {
                 0.0, 1.0, 0.0, 0.0,
                 0.0, 0.0, 0.0, 1.0
             );
-            texture_rotation = mat2(
-                1.0, 0.0,
-                0.0, 1.0
-            );
             break;
 
         // identity just in case
@@ -118,15 +114,11 @@ void main() {
                 0.0, 0.0, 1.0, 0.0,
                 0.0, 0.0, 0.0, 1.0
             );
-            texture_rotation = mat2(
-                1.0, 0.0,
-                0.0, 1.0
-            );
             break;
     }
 
     mat4 model_view = view * new_model * face_rotation;
     normal_out = transpose(inverse(mat3(model_view))) * normal;
-    tex_coords_out = vec3(texture_rotation * tex_coords, data.y);
+    tex_coords_out = vec3(tex_coords, (data.y + 1u) * 1.0 / texture_count);
     gl_Position = perspective * model_view * vec4(position, 1.0);
 }

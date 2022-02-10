@@ -3,6 +3,7 @@ use std::io::Cursor;
 
 use glium::index::PrimitiveType;
 use glium::texture::{SrgbTexture3d, RawImage3d, RawImage2d};
+use glium::uniforms::{Sampler, MinifySamplerFilter, MagnifySamplerFilter};
 use glium::{Display, DrawParameters, Frame, IndexBuffer, Program, Surface, VertexBuffer};
 use image::ImageFormat;
 
@@ -87,24 +88,39 @@ impl Mesh {
 
 pub struct BlockTextures {
     textures: SrgbTexture3d,
+    texture_count: u32,
 }
 
 impl BlockTextures {
     pub fn generate_textures(display: &Display) -> BlockTextures {
         let mut textures = vec![];
+
         let texture = image::load(Cursor::new(&include_bytes!("../../assets/textures/PNG/Tiles/dirt_grass.png")), ImageFormat::Png).unwrap().to_rgba8();
         let dims = texture.dimensions();
         let texture = RawImage2d::from_raw_rgba_reversed(&texture.into_raw(), dims);
         textures.push(texture);
+
+        let texture = image::load(Cursor::new(&include_bytes!("../../assets/textures/PNG/Tiles/grass_top.png")), ImageFormat::Png).unwrap().to_rgba8();
+        let dims = texture.dimensions();
+        let texture = RawImage2d::from_raw_rgba_reversed(&texture.into_raw(), dims);
+        textures.push(texture);
+
+        let texture = image::load(Cursor::new(&include_bytes!("../../assets/textures/PNG/Tiles/dirt.png")), ImageFormat::Png).unwrap().to_rgba8();
+        let dims = texture.dimensions();
+        let texture = RawImage2d::from_raw_rgba_reversed(&texture.into_raw(), dims);
+        textures.push(texture);
+
         let textures = RawImage3d::from_vec_raw2d(&textures);
         let textures = SrgbTexture3d::new(display, textures).unwrap();
         BlockTextures {
-            textures
+            textures,
+            texture_count: 3,
         }
     }
 }
 
-#[repr(i32)]
+#[repr(u32)]
+#[derive(Copy, Clone)]
 enum FaceDirection {
     Up = 0,
     Down = 1,
@@ -112,6 +128,22 @@ enum FaceDirection {
     Back = 3,
     Left = 4,
     Right = 5,
+}
+
+impl Block {
+    fn get_texture(&self, face: FaceDirection) -> u32 {
+        match self {
+            Block::Air => 0,
+
+            Block::Solid => {
+                match face {
+                    FaceDirection::Up => 1,
+                    FaceDirection::Down => 2,
+                    _ => 0,
+                }
+            }
+        }
+    }
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -123,14 +155,13 @@ struct InstanceData {
     /// 12..15 = z
     /// 32..63 = texture map
     data: (u32, u32),
-
 }
 
 implement_vertex!(InstanceData, data);
 
 impl InstanceData {
-    fn new(dir: FaceDirection, x: u32, y: u32, z: u32) -> InstanceData {
-        let mut data = InstanceData { data: (0, 0) };
+    fn new(dir: FaceDirection, block: Block, x: u32, y: u32, z: u32) -> InstanceData {
+        let mut data = InstanceData { data: (0, block.get_texture(dir)) };
         data.set_direction(dir);
         data.set_x(x);
         data.set_y(y);
@@ -232,27 +263,27 @@ impl Chunk {
                     let z = z as isize;
                     if *self.get_block(chunks, x, y, z) == Block::Solid {
                         if *self.get_block(chunks, x, y + 1, z) == Block::Air {
-                            instance_data.push(InstanceData::new(FaceDirection::Up, x as u32, y as u32, z as u32));
+                            instance_data.push(InstanceData::new(FaceDirection::Up, Block::Solid, x as u32, y as u32, z as u32));
                         }
 
                         if *self.get_block(chunks, x, y - 1, z) == Block::Air {
-                            instance_data.push(InstanceData::new(FaceDirection::Down, x as u32, y as u32, z as u32));
+                            instance_data.push(InstanceData::new(FaceDirection::Down, Block::Solid, x as u32, y as u32, z as u32));
                         }
 
                         if *self.get_block(chunks, x + 1, y, z) == Block::Air {
-                            instance_data.push(InstanceData::new(FaceDirection::Front, x as u32, y as u32, z as u32));
+                            instance_data.push(InstanceData::new(FaceDirection::Front, Block::Solid, x as u32, y as u32, z as u32));
                         }
 
                         if *self.get_block(chunks, x - 1, y, z) == Block::Air {
-                            instance_data.push(InstanceData::new(FaceDirection::Back, x as u32, y as u32, z as u32));
+                            instance_data.push(InstanceData::new(FaceDirection::Back, Block::Solid, x as u32, y as u32, z as u32));
                         }
 
                         if *self.get_block(chunks, x, y, z + 1) == Block::Air {
-                            instance_data.push(InstanceData::new(FaceDirection::Left, x as u32, y as u32, z as u32));
+                            instance_data.push(InstanceData::new(FaceDirection::Left, Block::Solid, x as u32, y as u32, z as u32));
                         }
 
                         if *self.get_block(chunks, x, y, z - 1) == Block::Air {
-                            instance_data.push(InstanceData::new(FaceDirection::Right, x as u32, y as u32, z as u32));
+                            instance_data.push(InstanceData::new(FaceDirection::Right, Block::Solid, x as u32, y as u32, z as u32));
                         }
                     }
                 }
@@ -292,7 +323,8 @@ impl Chunk {
                 view: view,
                 perspective: perspective,
                 light: [-1.0, 0.4, 0.9f32],
-                textures: &textures.textures,
+                textures: Sampler::new(&textures.textures).minify_filter(MinifySamplerFilter::Nearest).magnify_filter(MagnifySamplerFilter::Nearest),
+                texture_count: textures.texture_count,
             };
 
             target
