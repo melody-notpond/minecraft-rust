@@ -21,7 +21,7 @@ use minecraft_rust::client::chunk::{Chunk, ChunkWaiter, Mesh, BlockTextures};
 use minecraft_rust::packet::{ServerPacket, UserPacket};
 use minecraft_rust::client::player::Player;
 
-const USERNAME: &str = "owo";
+const USERNAME: &str = "uwu";
 const ADDRESS: &str = "0.0.0.0:6429";
 
 const VERTEX_SHADER: &str = include_str!("../shaders/vertex.glsl");
@@ -218,8 +218,8 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
         target.clear_color_and_depth((0.53, 0.80, 0.92, 1.0), 1.0);
 
         let perspective = camera.perspective(&target);
-
         let view = camera.view_matrix();
+        let frustum = camera.frustum(&target);
 
         let mut changed = 0;
         keys.extend(chunks.keys());
@@ -232,7 +232,10 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
                 }
 
                 chunk.populate_lights(&display, &lights);
-                chunk.render(&mut target, &program, perspective, view, &params, &square, &block_textures);
+
+                if chunk.aabb().is_in_frustum(&frustum) {
+                    chunk.render(&mut target, &program, perspective, view, &params, &square, &block_textures);
+                }
             }
             chunks.insert(*key, chunk);
         }

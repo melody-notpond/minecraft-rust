@@ -7,7 +7,7 @@ edition = "2018"
 
 [features]
 default = ["client", "server"]
-client = ["glium", "image", "tobj"]
+client = ["glium", "image", "tobj", "nalgebra"]
 server = ["ctrlc", "noise"]
 
 [[bin]]
@@ -23,6 +23,7 @@ required-features = ["server"]
 [dependencies]
 ctrlc = { version = "*", optional = true }
 glium = { version = "*", optional = true }
+nalgebra = { version = "*", optional = true }
 image = { version = "*", optional = true }
 noise = { version = "*", optional = true }
 serde = { version = "*", features = ["derive"] }

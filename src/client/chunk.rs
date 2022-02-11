@@ -10,6 +10,7 @@ use image::ImageFormat;
 use crate::blocks::FaceDirection;
 
 use super::light::LightSource;
+use super::shapes::frustum::Aabb;
 use super::shapes::{Normal, Position, TexCoord};
 use super::super::blocks::{Block, CHUNK_SIZE};
 use super::super::server::chunk::Chunk as ServerChunk;
@@ -211,6 +212,7 @@ pub struct Chunk {
     mesh_raw: Option<Vec<InstanceData>>,
     mesh: Option<Box<VertexBuffer<InstanceData>>>,
     lights: Option<Box<VertexBuffer<Light>>>,
+    aabb: Aabb,
 }
 
 impl Chunk {
@@ -223,6 +225,11 @@ impl Chunk {
             mesh_raw: None,
             mesh: None,
             lights: None,
+            aabb: Aabb {
+                centre: [chunk.get_chunk_x() as f32 * CHUNK_SIZE as f32 * 0.5 + CHUNK_SIZE as f32 * 0.25, chunk.get_chunk_y() as f32 *  CHUNK_SIZE as f32 * 0.5 + CHUNK_SIZE as f32 * 0.25, chunk.get_chunk_z() as f32 * CHUNK_SIZE as f32 * 0.5 + CHUNK_SIZE as f32 * 0.25],
+                extents: [CHUNK_SIZE as f32 * 0.25; 3],
+            }
+
         }
     }
 
@@ -375,6 +382,10 @@ impl Chunk {
 
     pub fn invalidate_lights(&mut self) {
         self.lights = None;
+    }
+
+    pub fn aabb(&self) -> &Aabb {
+        &self.aabb
     }
 }
 

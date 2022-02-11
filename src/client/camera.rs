@@ -1,9 +1,12 @@
-use std::time::Duration;
+use std::{time::Duration, convert::TryInto};
 
 use glium::{
     glutin::event::{ElementState, KeyboardInput, VirtualKeyCode},
     Frame, Surface,
 };
+use nalgebra::Vector3;
+
+use super::shapes::frustum::{Frustum, Plane};
 
 #[derive(Clone, Debug)]
 pub struct Camera {
@@ -13,7 +16,9 @@ pub struct Camera {
     pressed: [bool; 6], // W S A D UP DOWN
     speed: f32,
     sensitivity: f32,
-    fov: f32,
+    pub fov: f32,
+    pub z_far: f32,
+    pub z_near: f32,
 }
 
 impl Camera {
@@ -26,6 +31,8 @@ impl Camera {
             speed,
             sensitivity,
             fov: fov.to_radians(),
+            z_far: 1024.0,
+            z_near: 0.1,
         }
     }
 
@@ -125,8 +132,8 @@ impl Camera {
         let (width, height) = target.get_dimensions();
         let aspect_ratio = height as f32 / width as f32;
         let fov: f32 = self.fov;
-        let z_far = 1024.0;
-        let z_near = 0.1;
+        let z_far = self.z_far;
+        let z_near = self.z_near;
 
         let f = 1.0 / (fov / 2.0).tan();
 
@@ -169,5 +176,52 @@ impl Camera {
             [s[2], u[2], f[2], 0.0],
             [p[0], p[1], p[2], 1.0],
         ]
+    }
+
+    pub fn frustum(&self, target: &Frame) -> Frustum {
+        // https://learnopengl.com/Guest-Articles/2021/Scene/Frustum-Culling
+        let (width, height) = target.get_dimensions();
+        let half_v_side = self.z_far * (self.fov * 0.5).tan();
+        let half_h_side = half_v_side * height as f32 / width as f32;
+        let front = Vector3::from(self.direction).normalize();
+        let front_mult_far = self.z_far * front;
+        let right = front.cross(&Vector3::from([0.0, 1.0, 0.0]));
+        let up = right.cross(&front);
+
+        let mut frustum = Frustum {
+            top: Plane {
+                normal: right.cross(&(front_mult_far - up * half_v_side)).normalize().try_into().unwrap(),
+                distance: 0.0,
+            },
+            bottom: Plane {
+                normal: (front_mult_far + up * half_v_side).cross(&right).normalize().try_into().unwrap(),
+                distance: 0.0,
+            },
+            left: Plane {
+                normal: (front_mult_far - right * half_h_side).cross(&up).normalize().try_into().unwrap(),
+                distance: 0.0,
+            },
+            right: Plane {
+                normal: up.cross(&(front_mult_far + right * half_h_side)).normalize().try_into().unwrap(),
+                distance: 0.0,
+            },
+            far: Plane {
+                normal: (-front).try_into().unwrap(),
+                distance: 0.0,
+            },
+            near: Plane {
+                normal: front.try_into().unwrap(),
+                distance: 0.0,
+            },
+        };
+
+        frustum.near.distance = (Vector3::from(self.position) + self.z_near * front).norm();
+        frustum.far.distance = Vector3::from(frustum.far.normal).dot(&(Vector3::from(self.position) + front_mult_far)).abs();
+        frustum.left.distance = Vector3::from(frustum.left.normal).dot(&Vector3::from(self.position)).abs();
+        frustum.right.distance = Vector3::from(frustum.right.normal).dot(&Vector3::from(self.position)).abs();
+        frustum.top.distance = Vector3::from(frustum.top.normal).dot(&Vector3::from(self.position)).abs();
+        frustum.bottom.distance = Vector3::from(frustum.bottom.normal).dot(&Vector3::from(self.position)).abs();
+
+        frustum
     }
 }
