@@ -5,6 +5,7 @@ in vec2 tex_coords;
 in vec3 normal;
 in uvec2 data;
 in uint light;
+in uint selected;
 
 uniform mat4 model;
 uniform mat4 view;
@@ -124,9 +125,12 @@ void main() {
     light_colour *= vec3(1.0 - min_light);
     light_colour += vec3(min_light);
     light_out = vec4(light_colour, 1.0);
+    if (selected != 0u) {
+        light_out *= vec4(vec3(1.5), 1.0);
+    }
 
     mat4 model_view = view * new_model * face_rotation;
     normal_out = transpose(inverse(mat3(model_view))) * normal;
-    tex_coords_out = vec3(tex_coords, (data.y + 1u) * 1.0 / texture_count);
+    tex_coords_out = vec3(tex_coords, (data.y * 1.0 + 0.5) / texture_count);
     gl_Position = perspective * model_view * vec4(position, 1.0);
 }

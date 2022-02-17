@@ -28,6 +28,8 @@ image = { version = "*", optional = true }
 noise = { version = "*", optional = true }
 serde = { version = "*", features = ["derive"] }
 bincode = "*"
+lazy_static = "*"
 tobj = { version = "*", optional = true }
 tokio = { version = "*", features = ["rt", "net", "macros", "rt-multi-thread", "sync", "time"] }
+#toml = "*"
 rand = "*"

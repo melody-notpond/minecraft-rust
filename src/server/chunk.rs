@@ -18,7 +18,7 @@ impl ChunkGenerator for PerlinChunkGenerator {
     }
 
     fn generate(&mut self, chunk_x: i32, chunk_y: i32, chunk_z: i32) -> Box<[[[Block; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]> {
-        let mut blocks = Box::new([[[Block::Air; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]);
+        let mut blocks = Box::new([[[Block::air(); CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]);
 
         let chunk_x = chunk_x as f64;
         let chunk_y = chunk_y as f64;
@@ -30,7 +30,7 @@ impl ChunkGenerator for PerlinChunkGenerator {
                 for (z, block) in line.iter_mut().enumerate() {
                     let z = z as f64;
                     if self.0.get([(chunk_x * 16.0 + x) / 20.0, (chunk_y * 16.0 + y) / 20.0, (chunk_z * 16.0 + z) / 20.0]) > 0.1 {
-                        *block = Block::Solid;
+                        *block = Block::get("solid").unwrap_or_else(Block::air);
                     }
                 }
             }

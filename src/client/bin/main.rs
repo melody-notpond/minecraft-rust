@@ -4,7 +4,7 @@ use std::thread;
 use std::time::{Duration, Instant, SystemTime};
 
 use glium::glutin::dpi::PhysicalPosition;
-use glium::glutin::event::{ElementState, VirtualKeyCode};
+use glium::glutin::event::{ElementState, VirtualKeyCode, MouseButton};
 use glium::glutin::{
     event::{Event, StartCause, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
@@ -12,11 +12,12 @@ use glium::glutin::{
     ContextBuilder,
 };
 use glium::{Display, Program, Surface};
+use minecraft_rust::blocks::Block;
 use minecraft_rust::client::light::LightSource;
 use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
 
-use minecraft_rust::client::camera::Camera;
+use minecraft_rust::client::camera::{Camera, RaycastAction};
 use minecraft_rust::client::chunk::{Chunk, ChunkWaiter, Mesh, BlockTextures};
 use minecraft_rust::packet::{ServerPacket, UserPacket};
 use minecraft_rust::client::player::Player;
@@ -64,16 +65,17 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
         ..Default::default()
     };
 
-    let mut camera = Camera::new(50.0, 0.001, 90.0);
+    let mut camera = Camera::new(10.0, 0.001, 90.0);
     let mut chunks = HashMap::new();
     let mut lights = vec![LightSource::new(15, 10, 10, 15, camera.get_pos())];
     let mut players = HashMap::new();
     let square = Mesh::square(&display);
-    let block_textures = BlockTextures::generate_textures(&display);
+    Block::register_defaults();
+    let block_textures = Block::generate_atlas(&display);
 
-    for x in -5..=5 {
-        for y in -5..=5 {
-            for z in -5..=5 {
+    for x in -2..=2 {
+        for y in -2..=2 {
+            for z in -2..=2 {
                 chunks.insert((x, y, z), ChunkWaiter::Timestamp(0));
             }
         }
@@ -117,11 +119,24 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
                         let window = gl_window.window();
                         let size = window.inner_size();
                         let centre = PhysicalPosition::new(size.width / 2, size.height / 2);
+                        camera.raycast(&display, &mut chunks, RaycastAction::Unselect);
                         camera.turn_self(
                             position.x as i32 - centre.x as i32,
                             position.y as i32 - centre.y as i32,
                         );
+                        camera.raycast(&display, &mut chunks, RaycastAction::Select);
                         window.set_cursor_position(centre).unwrap();
+                    }
+
+                    WindowEvent::MouseInput { button, state, .. } if locked => {
+                        if state == ElementState::Pressed {
+                            match button {
+                                MouseButton::Left => camera.raycast(&display, &mut chunks, RaycastAction::Place(Block::get("solid").unwrap_or_else(Block::air))),
+                                MouseButton::Right => camera.raycast(&display, &mut chunks, RaycastAction::Remove),
+
+                                _ => (),
+                            }
+                        }
                     }
 
                     _ => (),
@@ -204,7 +219,9 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
             }
         }
 
+        camera.raycast(&display, &mut chunks, RaycastAction::Unselect);
         camera.tick(delta);
+        camera.raycast(&display, &mut chunks, RaycastAction::Select);
         if camera.is_moving() {
             let _ = tx.try_send(UserPacket::MoveSelf { pos: camera.get_pos() });
             if let Some(light) = lights.get_mut(0) {
@@ -229,6 +246,8 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
                 if changed < 50 && chunk.generate_mesh(&display, &chunks) {
                     changed += 1;
                     chunk.invalidate_lights();
+                    chunk.invalidate_selection();
+                    chunk.select(&display, None);
                 }
 
                 chunk.populate_lights(&display, &lights);

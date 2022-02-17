@@ -2,7 +2,7 @@ use std::{collections::{HashMap, HashSet, hash_map::Entry}, io, net::SocketAddr,
 
 use tokio::{net::UdpSocket, sync::{mpsc, Mutex}};
 
-use minecraft_rust::{packet::{ServerPacket, UserPacket}, server::{chunk::{Chunk, PerlinChunkGenerator}, player::Player}};
+use minecraft_rust::{packet::{ServerPacket, UserPacket}, server::{chunk::{Chunk, PerlinChunkGenerator}, player::Player}, blocks::Block};
 
 const BIND: &str = "127.0.0.1:6942";
 
@@ -14,6 +14,7 @@ async fn main() -> io::Result<()> {
         *run2.blocking_lock() = false;
     }).unwrap();
 
+    Block::register_defaults();
     let sock = Arc::new(UdpSocket::bind(BIND).await.unwrap());
     let players = Arc::new(Mutex::new(HashMap::new()));
     let player_names = HashSet::new();

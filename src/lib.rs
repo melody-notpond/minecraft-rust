@@ -2,6 +2,9 @@
 #[cfg(feature = "glium")]
 extern crate glium;
 
+#[macro_use]
+extern crate lazy_static;
+
 #[cfg(feature = "client")]
 pub mod client;
 

@@ -1,12 +1,14 @@
-use std::{time::Duration, convert::TryInto};
+use std::{time::Duration, convert::TryInto, collections::HashMap};
 
 use glium::{
     glutin::event::{ElementState, KeyboardInput, VirtualKeyCode},
-    Frame, Surface,
+    Frame, Surface, Display,
 };
 use nalgebra::Vector3;
 
-use super::shapes::frustum::{Frustum, Plane};
+use crate::blocks::{Block, CHUNK_SIZE};
+
+use super::{shapes::frustum::{Frustum, Plane}, chunk::ChunkWaiter};
 
 #[derive(Clone, Debug)]
 pub struct Camera {
@@ -224,4 +226,166 @@ impl Camera {
 
         frustum
     }
+
+    pub fn raycast(&self, display: &Display, chunks: &mut HashMap<(i32, i32, i32), ChunkWaiter>, action: RaycastAction) {
+        let mut pos = self.position;
+
+        for _ in 0..16 {
+            let mut pos2 = [(pos[0] * 2.0).floor() as i32, (pos[1] * 2.0).floor() as i32, (pos[2] * 2.0).floor() as i32];
+            pos = [pos[0] + self.direction[0] * 0.25, pos[1] + self.direction[1] * 0.25, pos[2] + self.direction[2] * 0.25];
+
+            if pos2[0] < 0 {
+                pos2[0] -= CHUNK_SIZE as i32;
+            }
+            if pos2[1] < 0 {
+                pos2[1] -= CHUNK_SIZE as i32;
+            }
+            if pos2[2] < 0 {
+                pos2[2] -= CHUNK_SIZE as i32;
+            }
+
+            let (chunk_x, chunk_y, chunk_z) = (pos2[0] / CHUNK_SIZE as i32, pos2[1] / CHUNK_SIZE as i32, pos2[2] / CHUNK_SIZE as i32);
+            let chunk = match chunks.get_mut(&(chunk_x, chunk_y, chunk_z)) {
+                Some(ChunkWaiter::Chunk(chunk)) => chunk,
+                _ => continue,
+            };
+
+            if pos2[0] < 0 {
+                pos2[0] += CHUNK_SIZE as i32;
+            }
+            if pos2[1] < 0 {
+                pos2[1] += CHUNK_SIZE as i32;
+            }
+            if pos2[2] < 0 {
+                pos2[2] += CHUNK_SIZE as i32;
+            }
+
+            let (x, y, z) = ((pos2[0] - chunk_x * CHUNK_SIZE as i32) % CHUNK_SIZE as i32, (pos2[1] - chunk_y * CHUNK_SIZE as i32) % CHUNK_SIZE as i32, (pos2[2] - chunk_z * CHUNK_SIZE as i32) % CHUNK_SIZE as i32);
+            let (x, y, z) = (x as usize, y as usize, z as usize);
+            let block = chunk.block_mut(x, y, z);
+
+            if block.is_solid().unwrap_or(false) {
+                match action {
+                    RaycastAction::Place(block) => {
+                        pos = [pos[0] - self.direction[0] * 0.5, pos[1] - self.direction[1] * 0.5, pos[2] - self.direction[2] * 0.5];
+                        let mut pos2 = [(pos[0] * 2.0).floor() as i32, (pos[1] * 2.0).floor() as i32, (pos[2] * 2.0).floor() as i32];
+
+                        if pos2[0] < 0 {
+                            pos2[0] -= CHUNK_SIZE as i32;
+                        }
+                        if pos2[1] < 0 {
+                            pos2[1] -= CHUNK_SIZE as i32;
+                        }
+                        if pos2[2] < 0 {
+                            pos2[2] -= CHUNK_SIZE as i32;
+                        }
+
+                        let (chunk_x, chunk_y, chunk_z) = (pos2[0] / CHUNK_SIZE as i32, pos2[1] / CHUNK_SIZE as i32, pos2[2] / CHUNK_SIZE as i32);
+                        let chunk = match chunks.get_mut(&(chunk_x, chunk_y, chunk_z)) {
+                            Some(ChunkWaiter::Chunk(chunk)) => chunk,
+                            _ => continue,
+                        };
+                        if pos2[0] < 0 {
+                            pos2[0] += CHUNK_SIZE as i32;
+                        }
+                        if pos2[1] < 0 {
+                            pos2[1] += CHUNK_SIZE as i32;
+                        }
+                        if pos2[2] < 0 {
+                            pos2[2] += CHUNK_SIZE as i32;
+                        }
+
+                        let (x, y, z) = ((pos2[0] - chunk_x * CHUNK_SIZE as i32) % CHUNK_SIZE as i32, (pos2[1] - chunk_y * CHUNK_SIZE as i32) % CHUNK_SIZE as i32, (pos2[2] - chunk_z * CHUNK_SIZE as i32) % CHUNK_SIZE as i32);
+                        let (x, y, z) = (x as usize, y as usize, z as usize);
+                        *chunk.block_mut(x, y, z) = block;
+                        chunk.invalidate_mesh();
+
+                        if x == 0 {
+                            if let Some(ChunkWaiter::Chunk(chunk)) = chunks.get_mut(&(chunk_x - 1, chunk_y, chunk_z)) {
+                                chunk.invalidate_mesh();
+                            }
+                        } else if x == CHUNK_SIZE - 1 {
+                            if let Some(ChunkWaiter::Chunk(chunk)) = chunks.get_mut(&(chunk_x + 1, chunk_y, chunk_z)) {
+                                chunk.invalidate_mesh();
+                            }
+                        }
+
+                        if y == 0 {
+                            if let Some(ChunkWaiter::Chunk(chunk)) = chunks.get_mut(&(chunk_x, chunk_y - 1, chunk_z)) {
+                                chunk.invalidate_mesh();
+                            }
+                        } else if y == CHUNK_SIZE - 1 {
+                            if let Some(ChunkWaiter::Chunk(chunk)) = chunks.get_mut(&(chunk_x, chunk_y + 1, chunk_z)) {
+                                chunk.invalidate_mesh();
+                            }
+                        }
+
+                        if z == 0 {
+                            if let Some(ChunkWaiter::Chunk(chunk)) = chunks.get_mut(&(chunk_x, chunk_y, chunk_z - 1)) {
+                                chunk.invalidate_mesh();
+                            }
+                        } else if z == CHUNK_SIZE - 1 {
+                            if let Some(ChunkWaiter::Chunk(chunk)) = chunks.get_mut(&(chunk_x, chunk_y, chunk_z + 1)) {
+                                chunk.invalidate_mesh();
+                            }
+                        }
+                    }
+
+                    RaycastAction::Remove => {
+                        *block = Block::air();
+                        chunk.invalidate_mesh();
+
+                        if x == 0 {
+                            if let Some(ChunkWaiter::Chunk(chunk)) = chunks.get_mut(&(chunk_x - 1, chunk_y, chunk_z)) {
+                                chunk.invalidate_mesh();
+                            }
+                        } else if x == CHUNK_SIZE - 1 {
+                            if let Some(ChunkWaiter::Chunk(chunk)) = chunks.get_mut(&(chunk_x + 1, chunk_y, chunk_z)) {
+                                chunk.invalidate_mesh();
+                            }
+                        }
+
+                        if y == 0 {
+                            if let Some(ChunkWaiter::Chunk(chunk)) = chunks.get_mut(&(chunk_x, chunk_y - 1, chunk_z)) {
+                                chunk.invalidate_mesh();
+                            }
+                        } else if y == CHUNK_SIZE - 1 {
+                            if let Some(ChunkWaiter::Chunk(chunk)) = chunks.get_mut(&(chunk_x, chunk_y + 1, chunk_z)) {
+                                chunk.invalidate_mesh();
+                            }
+                        }
+
+                        if z == 0 {
+                            if let Some(ChunkWaiter::Chunk(chunk)) = chunks.get_mut(&(chunk_x, chunk_y, chunk_z - 1)) {
+                                chunk.invalidate_mesh();
+                            }
+                        } else if z == CHUNK_SIZE - 1 {
+                            if let Some(ChunkWaiter::Chunk(chunk)) = chunks.get_mut(&(chunk_x, chunk_y, chunk_z + 1)) {
+                                chunk.invalidate_mesh();
+                            }
+                        }
+                    }
+
+                    RaycastAction::Unselect => {
+                        chunk.invalidate_selection();
+                        chunk.select(display, None);
+                    }
+
+                    RaycastAction::Select => {
+                        chunk.invalidate_selection();
+                        chunk.select(display, Some((x, y, z)));
+                    }
+                }
+
+                break;
+            }
+        }
+    }
+}
+
+pub enum RaycastAction {
+    Place(Block),
+    Remove,
+    Unselect,
+    Select,
 }
