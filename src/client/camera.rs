@@ -13,6 +13,7 @@ use super::{shapes::frustum::{Frustum, Plane}, chunk::ChunkWaiter};
 #[derive(Clone, Debug)]
 pub struct Camera {
     position: [f32; 3],
+    old_chunk_pos: [i32; 3],
     direction: [f32; 3],
     velocity: [f32; 3],
     pressed: [bool; 6], // W S A D UP DOWN
@@ -27,6 +28,7 @@ impl Camera {
     pub fn new(speed: f32, sensitivity: f32, fov: f32) -> Camera {
         Camera {
             position: [0.0; 3],
+            old_chunk_pos: [0; 3],
             direction: [1.0, 0.0, 0.0],
             velocity: [0.0; 3],
             pressed: [false; 6],
@@ -231,7 +233,107 @@ impl Camera {
         let mut pos = self.position;
 
         for _ in 0..16 {
-            let mut pos2 = [(pos[0] * 2.0).floor() as i32, (pos[1] * 2.0).floor() as i32, (pos[2] * 2.0).floor() as i32];
+            pos = [pos[0] + self.direction[0] * 0.25, pos[1] + self.direction[1] * 0.25, pos[2] + self.direction[2] * 0.25];
+            let mut block_coords = [(pos[0] * 2.0).round() as i32, (pos[1] * 2.0).round() as i32, (pos[2] * 2.0).round() as i32];
+
+            if block_coords[0] < 0 {
+                block_coords[0] -= CHUNK_SIZE as i32 - 1;
+            }
+            if block_coords[1] < 0 {
+                block_coords[1] -= CHUNK_SIZE as i32 - 1;
+            }
+            if block_coords[2] < 0 {
+                block_coords[2] -= CHUNK_SIZE as i32 - 1;
+            }
+
+            let (chunk_x, chunk_y, chunk_z) = (block_coords[0] / CHUNK_SIZE as i32, block_coords[1] / CHUNK_SIZE as i32, block_coords[2] / CHUNK_SIZE as i32);
+            let chunk = match chunks.get_mut(&(chunk_x, chunk_y, chunk_z)) {
+                Some(ChunkWaiter::Chunk(chunk)) => chunk,
+                _ => continue,
+            };
+
+            if block_coords[0] < 0 {
+                block_coords[0] += CHUNK_SIZE as i32 - 1;
+            }
+            if block_coords[1] < 0 {
+                block_coords[1] += CHUNK_SIZE as i32 - 1;
+            }
+            if block_coords[2] < 0 {
+                block_coords[2] += CHUNK_SIZE as i32 - 1;
+            }
+
+            let (mut x, mut y, mut z) = (block_coords[0] % CHUNK_SIZE as i32, block_coords[1] % CHUNK_SIZE as i32, block_coords[2] % CHUNK_SIZE as i32);
+            if x < 0 {
+                x += CHUNK_SIZE as i32;
+            }
+            if y < 0 {
+                y += CHUNK_SIZE as i32;
+            }
+            if z < 0 {
+                z += CHUNK_SIZE as i32;
+            }
+            let (x, y, z) = (x as usize, y as usize, z as usize);
+            let block = chunk.block_mut(x, y, z);
+
+            if block.is_solid().unwrap_or(false) {
+                match action {
+                    RaycastAction::Place(_block) => {
+                        // TODO
+                    }
+
+                    RaycastAction::Remove => {
+                        *block = Block::air();
+                        chunk.invalidate_mesh();
+
+                        if x == 0 {
+                            if let Some(ChunkWaiter::Chunk(chunk)) = chunks.get_mut(&(chunk_x - 1, chunk_y, chunk_z)) {
+                                chunk.invalidate_mesh();
+                            }
+                        } else if x == CHUNK_SIZE - 1 {
+                            if let Some(ChunkWaiter::Chunk(chunk)) = chunks.get_mut(&(chunk_x + 1, chunk_y, chunk_z)) {
+                                chunk.invalidate_mesh();
+                            }
+                        }
+
+                        if y == 0 {
+                            if let Some(ChunkWaiter::Chunk(chunk)) = chunks.get_mut(&(chunk_x, chunk_y - 1, chunk_z)) {
+                                chunk.invalidate_mesh();
+                            }
+                        } else if y == CHUNK_SIZE - 1 {
+                            if let Some(ChunkWaiter::Chunk(chunk)) = chunks.get_mut(&(chunk_x, chunk_y + 1, chunk_z)) {
+                                chunk.invalidate_mesh();
+                            }
+                        }
+
+                        if z == 0 {
+                            if let Some(ChunkWaiter::Chunk(chunk)) = chunks.get_mut(&(chunk_x, chunk_y, chunk_z - 1)) {
+                                chunk.invalidate_mesh();
+                            }
+                        } else if z == CHUNK_SIZE - 1 {
+                            if let Some(ChunkWaiter::Chunk(chunk)) = chunks.get_mut(&(chunk_x, chunk_y, chunk_z + 1)) {
+                                chunk.invalidate_mesh();
+                            }
+                        }
+                    }
+
+                    RaycastAction::Unselect => {
+                        chunk.invalidate_selection();
+                        chunk.select(display, None);
+                    }
+
+                    RaycastAction::Select => {
+                        chunk.invalidate_selection();
+                        chunk.select(display, Some((x, y, z)));
+                    }
+                }
+
+                break;
+            }
+        }
+
+        /*
+        for _ in 0..16 {
+            let mut pos2 = [((pos[0] + 0.25) * 2.0).floor() as i32, ((pos[1] + 0.25) * 2.0).floor() as i32, ((pos[2] + 0.25) * 2.0).floor() as i32];
             pos = [pos[0] + self.direction[0] * 0.25, pos[1] + self.direction[1] * 0.25, pos[2] + self.direction[2] * 0.25];
 
             if pos2[0] < 0 {
@@ -380,6 +482,12 @@ impl Camera {
                 break;
             }
         }
+        */
+
+    }
+
+    pub fn check_loaded_chunks(&self, chunks: &mut HashMap<(i32, i32, i32), ChunkWaiter>) {
+
     }
 }
 

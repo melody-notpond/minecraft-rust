@@ -18,7 +18,7 @@ use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
 
 use minecraft_rust::client::camera::{Camera, RaycastAction};
-use minecraft_rust::client::chunk::{Chunk, ChunkWaiter, Mesh, BlockTextures};
+use minecraft_rust::client::chunk::{Chunk, ChunkWaiter, Mesh};
 use minecraft_rust::packet::{ServerPacket, UserPacket};
 use minecraft_rust::client::player::Player;
 
@@ -229,6 +229,8 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
                 light.set_location(camera.get_pos());
                 light.invalidate_chunk_lighting(&mut chunks);
             }
+
+            camera.check_loaded_chunks(&mut chunks);
         }
 
         let mut target = display.draw();
@@ -243,17 +245,19 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
         for key in keys.iter() {
             let mut chunk = chunks.remove(key).unwrap();
             if let ChunkWaiter::Chunk(chunk) = &mut chunk {
-                if changed < 50 && chunk.generate_mesh(&display, &chunks) {
-                    changed += 1;
-                    chunk.invalidate_lights();
-                    chunk.invalidate_selection();
-                    chunk.select(&display, None);
-                }
+                if chunk.loaded {
+                    if changed < 50 && chunk.generate_mesh(&display, &chunks) {
+                        changed += 1;
+                        chunk.invalidate_lights();
+                        chunk.invalidate_selection();
+                        chunk.select(&display, None);
+                    }
 
-                chunk.populate_lights(&display, &lights);
+                    chunk.populate_lights(&display, &lights);
 
-                if chunk.aabb().is_in_frustum(&frustum) {
-                    chunk.render(&mut target, &program, perspective, view, &params, &square, &block_textures);
+                    if chunk.aabb().is_in_frustum(&frustum) {
+                        chunk.render(&mut target, &program, perspective, view, &params, &square, &block_textures);
+                    }
                 }
             }
             chunks.insert(*key, chunk);

@@ -1,11 +1,9 @@
 use std::collections::HashMap;
-use std::io::Cursor;
 
 use glium::index::PrimitiveType;
-use glium::texture::{SrgbTexture3d, RawImage3d, RawImage2d};
+use glium::texture::SrgbTexture3d;
 use glium::uniforms::{Sampler, MinifySamplerFilter, MagnifySamplerFilter};
 use glium::{Display, DrawParameters, Frame, IndexBuffer, Program, Surface, VertexBuffer};
-use image::ImageFormat;
 
 use crate::blocks::FaceDirection;
 
@@ -193,6 +191,7 @@ pub struct Chunk {
     lights: Option<Box<VertexBuffer<Light>>>,
     selected: Option<Box<VertexBuffer<Selection>>>,
     aabb: Aabb,
+    pub loaded: bool,
 }
 
 impl Chunk {
@@ -209,8 +208,8 @@ impl Chunk {
             aabb: Aabb {
                 centre: [chunk.get_chunk_x() as f32 * CHUNK_SIZE as f32 * 0.5 + CHUNK_SIZE as f32 * 0.25, chunk.get_chunk_y() as f32 *  CHUNK_SIZE as f32 * 0.5 + CHUNK_SIZE as f32 * 0.25, chunk.get_chunk_z() as f32 * CHUNK_SIZE as f32 * 0.5 + CHUNK_SIZE as f32 * 0.25],
                 extents: [CHUNK_SIZE as f32 * 0.25; 3],
-            }
-
+            },
+            loaded: true,
         }
     }
 
@@ -381,6 +380,7 @@ impl Chunk {
         }
 
         let coords = if let Some(coords) = coords {
+            println!("{:?}", coords);
             coords
         } else {
             (CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE)
