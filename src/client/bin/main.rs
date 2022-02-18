@@ -67,7 +67,7 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
 
     let mut camera = Camera::new(10.0, 0.001, 90.0);
     let mut chunks = HashMap::new();
-    let mut lights = vec![LightSource::new(15, 10, 10, 15, camera.get_pos())];
+    let mut lights = vec![LightSource::new(15, 15, 15, camera.get_pos())];
     let mut players = HashMap::new();
     let square = Mesh::square(&display);
     Block::register_defaults();
@@ -242,7 +242,7 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
                 light.invalidate_chunk_lighting(&mut chunks);
             }
 
-            camera.check_loaded_chunks(&mut chunks);
+            //camera.check_loaded_chunks(&mut chunks);
         }
 
         let mut target = display.draw();

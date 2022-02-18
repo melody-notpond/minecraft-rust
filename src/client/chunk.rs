@@ -166,9 +166,9 @@ struct Light {
 implement_vertex!(Light, light);
 
 impl Light {
-    fn new(red: u32, green: u32, blue: u32, intensity: u32) -> Light {
+    fn new(red: u32, green: u32, blue: u32) -> Light {
         Light {
-            light: ((red & 0xf) << 12) | ((green & 0xf) << 8) | ((blue & 0xf) << 4) | (intensity & 0xf)
+            light: ((red & 0xf) << 12) | ((green & 0xf) << 8) | ((blue & 0xf) << 4)
         }
     }
 }
@@ -251,6 +251,14 @@ impl Chunk {
         let (x, y, z) = (x as usize, y as usize, z as usize);
 
         (chunk_x, chunk_y, chunk_z, x, y, z)
+    }
+
+    pub fn triangle_count(&self) -> usize {
+        if let Some(v) = &self.mesh_raw {
+            v.len() * 2
+        } else {
+            0
+        }
     }
 
     pub fn block_mut(&mut self, x: usize, y: usize, z: usize) -> &mut Block {
@@ -339,16 +347,18 @@ impl Chunk {
                 let mut red = 0;
                 let mut green = 0;
                 let mut blue = 0;
-                let mut intensity = 0;
 
                 for light in lights {
-                    red += light.red();
-                    green += light.green();
-                    blue += light.blue();
-                    intensity += light.calculate_light_intensity(self.chunk_x * CHUNK_SIZE as i32 + x, self.chunk_y * CHUNK_SIZE as i32 + y, self.chunk_z * CHUNK_SIZE as i32 + z, dir);
+                    let (dred, dgreen, dblue) = light.calculate_light_intensity(self.chunk_x * CHUNK_SIZE as i32 + x, self.chunk_y * CHUNK_SIZE as i32 + y, self.chunk_z * CHUNK_SIZE as i32 + z, dir);
+                    red += dred;
+                    green += dgreen;
+                    blue += dblue;
                 }
 
-                light_data.push(Light::new(red as u32 & 0xf, green as u32 & 0xf, blue as u32 & 0xf, intensity & 0xf));
+                red = red.min(15);
+                green = green.min(15);
+                blue = blue.min(15);
+                light_data.push(Light::new(red as u32, green as u32, blue as u32));
             }
 
             self.lights = Some(Box::new(VertexBuffer::new(display, &light_data).unwrap()));

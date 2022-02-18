@@ -120,8 +120,8 @@ void main() {
             break;
     }
 
-    vec3 light_colour = vec3(((light & 0xf000u) >> 12) / 15.0, ((light & 0x0f00u) >> 8) / 15.0, ((light & 0x00f0u) >> 4) / 15.0) * (light & 0x000fu) / 15.0;
-    const float min_light = 0.05;
+    vec3 light_colour = vec3(((light & 0xf000u) >> 12) / 15.0, ((light & 0x0f00u) >> 8) / 15.0, ((light & 0x00f0u) >> 4) / 15.0);
+    const float min_light = 0.005;
     light_colour *= vec3(1.0 - min_light);
     light_colour += vec3(min_light);
     light_out = vec4(light_colour, 1.0);
