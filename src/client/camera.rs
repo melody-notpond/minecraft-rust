@@ -1,4 +1,4 @@
-use std::{time::Duration, convert::TryInto, collections::HashMap};
+use std::{time::Duration, convert::TryInto, collections::{HashMap, hash_map::Entry}};
 
 use glium::{
     glutin::event::{ElementState, KeyboardInput, VirtualKeyCode},
@@ -8,7 +8,7 @@ use nalgebra::Vector3;
 
 use crate::blocks::{Block, CHUNK_SIZE};
 
-use super::{shapes::frustum::{Frustum, Plane}, chunk::ChunkWaiter};
+use super::{shapes::frustum::{Frustum, Plane}, chunk::{ChunkWaiter, Chunk}};
 
 #[derive(Clone, Debug)]
 pub struct Camera {
@@ -234,45 +234,13 @@ impl Camera {
 
         for _ in 0..16 {
             pos = [pos[0] + self.direction[0] * 0.25, pos[1] + self.direction[1] * 0.25, pos[2] + self.direction[2] * 0.25];
-            let mut block_coords = [(pos[0] * 2.0).round() as i32, (pos[1] * 2.0).round() as i32, (pos[2] * 2.0).round() as i32];
+            let (chunk_x, chunk_y, chunk_z, x, y, z) = Chunk::world_to_chunk_coords(pos[0], pos[1], pos[2]);
 
-            if block_coords[0] < 0 {
-                block_coords[0] -= CHUNK_SIZE as i32 - 1;
-            }
-            if block_coords[1] < 0 {
-                block_coords[1] -= CHUNK_SIZE as i32 - 1;
-            }
-            if block_coords[2] < 0 {
-                block_coords[2] -= CHUNK_SIZE as i32 - 1;
-            }
-
-            let (chunk_x, chunk_y, chunk_z) = (block_coords[0] / CHUNK_SIZE as i32, block_coords[1] / CHUNK_SIZE as i32, block_coords[2] / CHUNK_SIZE as i32);
             let chunk = match chunks.get_mut(&(chunk_x, chunk_y, chunk_z)) {
                 Some(ChunkWaiter::Chunk(chunk)) => chunk,
                 _ => continue,
             };
 
-            if block_coords[0] < 0 {
-                block_coords[0] += CHUNK_SIZE as i32 - 1;
-            }
-            if block_coords[1] < 0 {
-                block_coords[1] += CHUNK_SIZE as i32 - 1;
-            }
-            if block_coords[2] < 0 {
-                block_coords[2] += CHUNK_SIZE as i32 - 1;
-            }
-
-            let (mut x, mut y, mut z) = (block_coords[0] % CHUNK_SIZE as i32, block_coords[1] % CHUNK_SIZE as i32, block_coords[2] % CHUNK_SIZE as i32);
-            if x < 0 {
-                x += CHUNK_SIZE as i32;
-            }
-            if y < 0 {
-                y += CHUNK_SIZE as i32;
-            }
-            if z < 0 {
-                z += CHUNK_SIZE as i32;
-            }
-            let (x, y, z) = (x as usize, y as usize, z as usize);
             let block = chunk.block_mut(x, y, z);
 
             if block.is_solid().unwrap_or(false) {
@@ -487,7 +455,39 @@ impl Camera {
     }
 
     pub fn check_loaded_chunks(&self, chunks: &mut HashMap<(i32, i32, i32), ChunkWaiter>) {
+        let (chunk_x, chunk_y, chunk_z, ..) = Chunk::world_to_chunk_coords(self.position[0], self.position[1], self.position[2]);
+        if chunk_x != self.old_chunk_pos[0]
+            || chunk_y != self.old_chunk_pos[1]
+            || chunk_z != self.old_chunk_pos[2]
+        {
+            for i in -3..=3 {
+                for j in -3..=3 {
+                    for k in -3..=3 {
+                        if let Some(ChunkWaiter::Chunk(chunk)) = chunks.get_mut(&(self.old_chunk_pos[0] + i, self.old_chunk_pos[1] + j, self.old_chunk_pos[2] + k)) {
+                            chunk.loaded = false;
+                        }
+                    }
+                }
+            }
 
+            for i in -2..=2 {
+                for j in -2..=2 {
+                    for k in -2..=2 {
+                        match chunks.entry((chunk_x + i, chunk_y + j, chunk_z + k)) {
+                            Entry::Occupied(mut occupied) => {
+                                if let ChunkWaiter::Chunk(chunk) = occupied.get_mut() {
+                                    chunk.loaded = true;
+                                }
+                            }
+
+                            Entry::Vacant(vacant) => {
+                                vacant.insert(ChunkWaiter::Timestamp(0));
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

@@ -213,6 +213,46 @@ impl Chunk {
         }
     }
 
+    pub fn world_to_chunk_coords(x: f32, y: f32, z: f32) -> (i32, i32, i32, usize, usize, usize) {
+        let mut block_coords = [(x * 2.0).round() as i32, (y * 2.0).round() as i32, (z * 2.0).round() as i32];
+
+        if block_coords[0] < 0 {
+            block_coords[0] -= CHUNK_SIZE as i32 - 1;
+        }
+        if block_coords[1] < 0 {
+            block_coords[1] -= CHUNK_SIZE as i32 - 1;
+        }
+        if block_coords[2] < 0 {
+            block_coords[2] -= CHUNK_SIZE as i32 - 1;
+        }
+
+        let (chunk_x, chunk_y, chunk_z) = (block_coords[0] / CHUNK_SIZE as i32, block_coords[1] / CHUNK_SIZE as i32, block_coords[2] / CHUNK_SIZE as i32);
+
+        if block_coords[0] < 0 {
+            block_coords[0] += CHUNK_SIZE as i32 - 1;
+        }
+        if block_coords[1] < 0 {
+            block_coords[1] += CHUNK_SIZE as i32 - 1;
+        }
+        if block_coords[2] < 0 {
+            block_coords[2] += CHUNK_SIZE as i32 - 1;
+        }
+
+        let (mut x, mut y, mut z) = (block_coords[0] % CHUNK_SIZE as i32, block_coords[1] % CHUNK_SIZE as i32, block_coords[2] % CHUNK_SIZE as i32);
+        if x < 0 {
+            x += CHUNK_SIZE as i32;
+        }
+        if y < 0 {
+            y += CHUNK_SIZE as i32;
+        }
+        if z < 0 {
+            z += CHUNK_SIZE as i32;
+        }
+        let (x, y, z) = (x as usize, y as usize, z as usize);
+
+        (chunk_x, chunk_y, chunk_z, x, y, z)
+    }
+
     pub fn block_mut(&mut self, x: usize, y: usize, z: usize) -> &mut Block {
         &mut self.blocks[x][y][z]
     }
@@ -380,7 +420,6 @@ impl Chunk {
         }
 
         let coords = if let Some(coords) = coords {
-            println!("{:?}", coords);
             coords
         } else {
             (CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE)

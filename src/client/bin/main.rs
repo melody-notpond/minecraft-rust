@@ -11,7 +11,7 @@ use glium::glutin::{
     window::WindowBuilder,
     ContextBuilder,
 };
-use glium::{Display, Program, Surface};
+use glium::{Display, Program, Surface, PolygonMode};
 use minecraft_rust::blocks::Block;
 use minecraft_rust::client::light::LightSource;
 use tokio::net::UdpSocket;
@@ -55,7 +55,7 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
 
     let program = Program::from_source(&display, VERTEX_SHADER, FRAGMENT_SHADER, None).unwrap();
 
-    let params = glium::DrawParameters {
+    let mut params = glium::DrawParameters {
         depth: glium::Depth {
             test: glium::draw_parameters::DepthTest::IfLess,
             write: true,
@@ -113,6 +113,18 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
                     }
 
                     WindowEvent::KeyboardInput { input, .. } if locked && camera.move_self(input) => (),
+
+                    WindowEvent::KeyboardInput { input, .. } if locked => {
+                        if let Some(VirtualKeyCode::Semicolon) = input.virtual_keycode {
+                            if input.state == ElementState::Released {
+                                match params.polygon_mode {
+                                    PolygonMode::Point => params.polygon_mode = PolygonMode::Line,
+                                    PolygonMode::Line => params.polygon_mode = PolygonMode::Fill,
+                                    PolygonMode::Fill => params.polygon_mode = PolygonMode::Point,
+                                }
+                            }
+                        }
+                    }
 
                     WindowEvent::CursorMoved { position, .. } if locked => {
                         let gl_window = display.gl_window();
