@@ -41,16 +41,19 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
     let wb = WindowBuilder::new();
     let cb = ContextBuilder::new().with_depth_buffer(24);
     let display = Display::new(wb, cb, &event_loop).unwrap();
-    let mut locked = true;
+    let mut locked;
 
     {
         let gl_window = display.gl_window();
         let window = gl_window.window();
-        window.set_cursor_grab(true).unwrap();
-        let size = window.inner_size();
-        let centre = PhysicalPosition::new(size.width / 2, size.height / 2);
-        window.set_cursor_position(centre).unwrap();
-        window.set_cursor_visible(false);
+        locked = window.set_cursor_grab(true).is_ok();
+
+        if locked {
+            let size = window.inner_size();
+            let centre = PhysicalPosition::new(size.width / 2, size.height / 2);
+            window.set_cursor_position(centre).unwrap();
+            window.set_cursor_visible(false);
+        }
     }
 
     let program = Program::from_source(&display, VERTEX_SHADER, FRAGMENT_SHADER, None).unwrap();
