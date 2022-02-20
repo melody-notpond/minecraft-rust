@@ -17,9 +17,9 @@ out vec3 normal_out;
 out vec4 light_out;
 
 void main() {
-    float x = ((data.x & 0x00f0u) >>  4u) * 0.5;
-    float y = ((data.x & 0x0f00u) >>  8u) * 0.5;
-    float z = ((data.x & 0xf000u) >> 12u) * 0.5;
+    float x = float((data.x & 0x00f0u) >>  4u) * 0.5;
+    float y = float((data.x & 0x0f00u) >>  8u) * 0.5;
+    float z = float((data.x & 0xf000u) >> 12u) * 0.5;
 
     mat4 new_model = model;
     new_model[3].x += x;
@@ -120,7 +120,7 @@ void main() {
             break;
     }
 
-    vec3 light_colour = vec3(((light & 0xf000u) >> 12) / 15.0, ((light & 0x0f00u) >> 8) / 15.0, ((light & 0x00f0u) >> 4) / 15.0);
+    vec3 light_colour = vec3(float((light & 0xf000u) >> 12) / 15.0, float((light & 0x0f00u) >> 8) / 15.0, float((light & 0x00f0u) >> 4) / 15.0);
     const float min_light = 0.05;
     light_colour *= vec3(1.0 - min_light);
     light_colour += vec3(min_light);
@@ -131,6 +131,6 @@ void main() {
 
     mat4 model_view = view * new_model * face_rotation;
     normal_out = transpose(inverse(mat3(model_view))) * normal;
-    tex_coords_out = vec3(tex_coords, (data.y * 1.0 + 0.5) / texture_count);
+    tex_coords_out = vec3(tex_coords, (float(data.y) + 0.5) / texture_count);
     gl_Position = perspective * model_view * vec4(position, 1.0);
 }
