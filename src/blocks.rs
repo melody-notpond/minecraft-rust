@@ -11,6 +11,7 @@ pub const CHUNK_SIZE: usize = 16;
 lazy_static! {
     static ref BLOCK_DATA_MAP: RwLock<Vec<BlockData>> = RwLock::new(Vec::new());
     static ref ID_BLOCK_MAP: RwLock<HashMap<String, Block>> = RwLock::new(HashMap::new());
+    static ref BLOCK_ID_NAME_MAP: RwLock<Vec<String>> = RwLock::new(Vec::new());
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -38,6 +39,9 @@ impl Block {
         ]));
         Block::register(String::from("dirt"), BlockData::new(true, vec![
             (String::from("assets/textures/PNG/Tiles/dirt.png"), vec![FaceDirection::Up, FaceDirection::Down, FaceDirection::Left, FaceDirection::Right, FaceDirection::Front, FaceDirection::Back]),
+        ]));
+        Block::register(String::from("stone"), BlockData::new(true, vec![
+            (String::from("assets/textures/PNG/Tiles/stone.png"), vec![FaceDirection::Up, FaceDirection::Down, FaceDirection::Left, FaceDirection::Right, FaceDirection::Front, FaceDirection::Back]),
         ]));
     }
 
