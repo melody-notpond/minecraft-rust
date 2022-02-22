@@ -4,7 +4,7 @@ use tokio::{net::UdpSocket, sync::{mpsc, Mutex}};
 
 use minecraft_rust::{packet::{ServerPacket, UserPacket}, server::{chunk::{Chunk, PerlinChunkGenerator}, player::Player}, blocks::Block};
 
-const BIND: &str = "127.0.0.1:6942";
+const BIND: &str = "127.0.0.1:6429";
 
 #[tokio::main]
 async fn main() -> io::Result<()> {

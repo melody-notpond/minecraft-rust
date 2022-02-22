@@ -23,10 +23,12 @@ use minecraft_rust::packet::{ServerPacket, UserPacket};
 use minecraft_rust::client::player::Player;
 
 const USERNAME: &str = "uwu";
-const ADDRESS: &str = "0.0.0.0:6429";
+const ADDRESS: &str = "0.0.0.0:6942";
 
-const VERTEX_SHADER: &str = include_str!("../shaders/vertex.glsl");
-const FRAGMENT_SHADER: &str = include_str!("../shaders/fragment.glsl");
+const CHUNKS_VERTEX_SHADER: &str = include_str!("../shaders/chunks-vertex.glsl");
+const CHUNKS_FRAGMENT_SHADER: &str = include_str!("../shaders/chunks-fragment.glsl");
+const ENTITY_VERTEX_SHADER: &str = include_str!("../shaders/entity-vertex.glsl");
+const ENTITY_FRAGMENT_SHADER: &str = include_str!("../shaders/entity-fragment.glsl");
 
 fn main() {
     let (send_tx, send_rx) = mpsc::channel(128);
@@ -56,7 +58,8 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
         }
     }
 
-    let program = Program::from_source(&display, VERTEX_SHADER, FRAGMENT_SHADER, None).unwrap();
+    let chunks_program = Program::from_source(&display, CHUNKS_VERTEX_SHADER, CHUNKS_FRAGMENT_SHADER, None).unwrap();
+    let entity_program = Program::from_source(&display, ENTITY_VERTEX_SHADER, ENTITY_FRAGMENT_SHADER, None).unwrap();
 
     let mut params = glium::DrawParameters {
         depth: glium::Depth {
@@ -64,7 +67,7 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
             write: true,
             ..Default::default()
         },
-        backface_culling: glium::draw_parameters::BackfaceCullingMode::CullClockwise,
+        backface_culling: glium::draw_parameters::BackfaceCullingMode::CullCounterClockwise,
         ..Default::default()
     };
 
@@ -271,7 +274,7 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
                     chunk.populate_lights(&display, &lights);
 
                     if chunk.aabb().is_in_frustum(&frustum) {
-                        chunk.render(&mut target, &program, perspective, view, &params, &square, &block_textures);
+                        chunk.render(&mut target, &chunks_program, perspective, view, &params, &square, &block_textures);
                     }
                 }
             }
@@ -291,7 +294,7 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
         }
 
         for (_, player) in players.iter() {
-            player.render(&mut target, &program, perspective, view, &params);
+            player.render(&mut target, &entity_program, perspective, view, &params);
         }
 
         target.finish().unwrap();
@@ -305,7 +308,7 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
 #[tokio::main]
 async fn networking_loop(tx: mpsc::Sender<UserPacket>, rx: mpsc::Receiver<UserPacket>, recv_tx: mpsc::Sender<ServerPacket>) -> std::io::Result<()> {
     let sock = Arc::new(UdpSocket::bind(ADDRESS).await.unwrap());
-    sock.connect("127.0.0.1:6942").await?;
+    sock.connect("127.0.0.1:6429").await?;
 
     tokio::spawn(transmitting(rx, sock.clone()));
     receiving(tx, sock, recv_tx).await

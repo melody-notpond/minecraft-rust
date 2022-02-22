@@ -55,8 +55,8 @@ const SQUARE_NORMALS: [Normal; 4] = [
 ];
 
 const SQUARE_INDICES: [u32; 6] = [
-    0, 2, 1,
-    1, 2, 3,
+    0, 1, 2,
+    1, 3, 2,
 ];
 
 #[derive(Debug)]

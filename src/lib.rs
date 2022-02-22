@@ -12,4 +12,5 @@ pub mod client;
 pub mod server;
 
 pub mod blocks;
+pub mod collision;
 pub mod packet;

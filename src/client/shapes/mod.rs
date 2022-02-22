@@ -1,4 +1,3 @@
-pub mod cube;
 pub mod frustum;
 
 #[derive(Copy, Clone, Debug)]

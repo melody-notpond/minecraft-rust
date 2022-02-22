@@ -30,7 +30,6 @@ impl ChunkGenerator for PerlinChunkGenerator {
                 for (z, block) in line.iter_mut().enumerate() {
                     let z = z as f64;
                     let coords = [(chunk_x * 16.0 + x) / 20.0, (chunk_y * 16.0 + y) / 20.0, (chunk_z * 16.0 + z) / 20.0];
-                    //let noise_value = self.0.get([coords[0], coords[1], coords[2], 0.0]);
                     let height = self.0.get([coords[0], coords[2]]) / 3.0;
 
                     if coords[1] <= height {
@@ -42,7 +41,9 @@ impl ChunkGenerator for PerlinChunkGenerator {
                             *block = Block::get("stone").unwrap_or_else(Block::air);
                         }
 
-
+                        if self.0.get(coords) > 0.65 && *block == Block::get("stone").unwrap_or_else(Block::invalid) {
+                            *block = Block::get("coal_ore").unwrap_or_else(Block::air);
+                        }
                     }
                 }
             }

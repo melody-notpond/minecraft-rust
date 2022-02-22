@@ -1,6 +1,7 @@
 use glium::{Display, DrawParameters, Frame, IndexBuffer, Program, Surface, VertexBuffer, index::PrimitiveType};
+use tobj::LoadOptions;
 
-use super::shapes::{Normal, Position, TexCoord, cube::*};
+use super::shapes::{Normal, Position, TexCoord};
 
 pub struct Player {
     pub name: String,
@@ -13,13 +14,42 @@ pub struct Player {
 
 impl Player {
     pub fn new(name: String, position: [f32; 3], display: &Display) -> Player {
+        let model = tobj::load_obj("assets/models/player.obj", &LoadOptions {
+            single_index: true,
+            triangulate: true,
+            ignore_points: true,
+            ignore_lines: true,
+        }).unwrap();
+
+        let mut positions = vec![];
+        let mut tex_coords = vec![];
+        let mut normals = vec![];
+
+        for i in (0..model.0[0].mesh.positions.len()).step_by(3) {
+            positions.push(Position {
+                position: [model.0[0].mesh.positions[i], model.0[0].mesh.positions[i + 1], model.0[0].mesh.positions[i + 2]],
+            });
+        }
+
+        for i in (0..model.0[0].mesh.texcoords.len()).step_by(2) {
+            tex_coords.push(TexCoord {
+                tex_coords: [model.0[0].mesh.texcoords[i], model.0[0].mesh.texcoords[i + 1]],
+            });
+        }
+
+        for i in (0..model.0[0].mesh.normals.len()).step_by(3) {
+            normals.push(Normal {
+                normal: [model.0[0].mesh.normals[i], model.0[0].mesh.normals[i + 1], model.0[0].mesh.normals[i + 2]],
+            });
+        }
+
         Player {
             name,
             position,
-            positions: VertexBuffer::new(display, &POSITIONS).unwrap(),
-            tex_coords: VertexBuffer::new(display, &TEX_COORDS).unwrap(),
-            normals: VertexBuffer::new(display, &NORMALS).unwrap(),
-            indices: IndexBuffer::new(display, PrimitiveType::TrianglesList, &INDICES).unwrap(),
+            positions: VertexBuffer::new(display, &positions).unwrap(),
+            tex_coords: VertexBuffer::new(display, &tex_coords).unwrap(),
+            normals: VertexBuffer::new(display, &normals).unwrap(),
+            indices: IndexBuffer::new(display, PrimitiveType::TrianglesList, &model.0[0].mesh.indices).unwrap(),
         }
     }
 

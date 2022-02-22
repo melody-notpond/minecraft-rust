@@ -43,6 +43,9 @@ impl Block {
         Block::register(String::from("stone"), BlockData::new(true, vec![
             (String::from("assets/textures/PNG/Tiles/stone.png"), vec![FaceDirection::Up, FaceDirection::Down, FaceDirection::Left, FaceDirection::Right, FaceDirection::Front, FaceDirection::Back]),
         ]));
+        Block::register(String::from("coal_ore"), BlockData::new(true, vec![
+            (String::from("assets/textures/PNG/Tiles/stone_coal.png"), vec![FaceDirection::Up, FaceDirection::Down, FaceDirection::Left, FaceDirection::Right, FaceDirection::Front, FaceDirection::Back]),
+        ]));
     }
 
     pub fn generate_atlas(display: &Display) -> BlockTextures {
@@ -89,6 +92,10 @@ impl Block {
 
     pub fn air() -> Block {
         Block(0)
+    }
+
+    pub fn invalid() -> Block {
+        Block(u32::MAX)
     }
 
     pub fn get(name: &str) -> Option<Block> {
