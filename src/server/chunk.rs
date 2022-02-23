@@ -1,12 +1,17 @@
-use noise::{Perlin, NoiseFn, Seedable};
-use serde::{Serialize, Deserialize};
+use noise::{NoiseFn, Perlin, Seedable};
+use serde::{Deserialize, Serialize};
 
 use super::super::blocks::{Block, CHUNK_SIZE};
 
 pub trait ChunkGenerator: Default {
     fn from_seed(seed: u32) -> Self;
 
-    fn generate(&mut self, chunk_x: i32, chunk_y: i32, chunk_z: i32) -> Box<[[[Block; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]>;
+    fn generate(
+        &mut self,
+        chunk_x: i32,
+        chunk_y: i32,
+        chunk_z: i32,
+    ) -> Box<[[[Block; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]>;
 }
 
 #[derive(Default)]
@@ -17,7 +22,12 @@ impl ChunkGenerator for PerlinChunkGenerator {
         PerlinChunkGenerator(Perlin::new().set_seed(seed))
     }
 
-    fn generate(&mut self, chunk_x: i32, chunk_y: i32, chunk_z: i32) -> Box<[[[Block; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]> {
+    fn generate(
+        &mut self,
+        chunk_x: i32,
+        chunk_y: i32,
+        chunk_z: i32,
+    ) -> Box<[[[Block; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]> {
         let mut blocks = Box::new([[[Block::air(); CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]);
 
         let chunk_x = chunk_x as f64;
@@ -29,7 +39,11 @@ impl ChunkGenerator for PerlinChunkGenerator {
                 let y = y as f64;
                 for (z, block) in line.iter_mut().enumerate() {
                     let z = z as f64;
-                    let coords = [(chunk_x * 16.0 + x) / 20.0, (chunk_y * 16.0 + y) / 20.0, (chunk_z * 16.0 + z) / 20.0];
+                    let coords = [
+                        (chunk_x * 16.0 + x) / 20.0,
+                        (chunk_y * 16.0 + y) / 20.0,
+                        (chunk_z * 16.0 + z) / 20.0,
+                    ];
                     let height = self.0.get([coords[0], coords[2]]) / 3.0;
 
                     if coords[1] <= height {
@@ -41,7 +55,9 @@ impl ChunkGenerator for PerlinChunkGenerator {
                             *block = Block::get("stone").unwrap_or_else(Block::air);
                         }
 
-                        if self.0.get(coords) > 0.65 && *block == Block::get("stone").unwrap_or_else(Block::invalid) {
+                        if self.0.get(coords) > 0.65
+                            && *block == Block::get("stone").unwrap_or_else(Block::invalid)
+                        {
                             *block = Block::get("coal_ore").unwrap_or_else(Block::air);
                         }
                     }
@@ -63,7 +79,8 @@ pub struct Chunk {
 
 impl Chunk {
     pub fn new<G>(chunk_x: i32, chunk_y: i32, chunk_z: i32, gen: &mut G) -> Chunk
-        where G: ChunkGenerator
+    where
+        G: ChunkGenerator,
     {
         let blocks = gen.generate(chunk_x, chunk_y, chunk_z);
 

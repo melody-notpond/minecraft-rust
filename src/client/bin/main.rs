@@ -4,14 +4,14 @@ use std::thread;
 use std::time::{Duration, Instant, SystemTime};
 
 use glium::glutin::dpi::PhysicalPosition;
-use glium::glutin::event::{ElementState, VirtualKeyCode, MouseButton};
+use glium::glutin::event::{ElementState, MouseButton, VirtualKeyCode};
 use glium::glutin::{
     event::{Event, StartCause, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::WindowBuilder,
     ContextBuilder,
 };
-use glium::{Display, Program, Surface, PolygonMode};
+use glium::{Display, PolygonMode, Program, Surface};
 use minecraft_rust::blocks::Block;
 use minecraft_rust::client::light::LightSource;
 use minecraft_rust::collision::DetectCollision;
@@ -20,8 +20,8 @@ use tokio::sync::mpsc;
 
 use minecraft_rust::client::camera::{Camera, RaycastAction};
 use minecraft_rust::client::chunk::{Chunk, ChunkWaiter, Mesh};
-use minecraft_rust::packet::{ServerPacket, UserPacket};
 use minecraft_rust::client::player::Player;
+use minecraft_rust::packet::{ServerPacket, UserPacket};
 
 const USERNAME: &str = "first";
 const ADDRESS: &str = "0.0.0.0:6941";
@@ -59,8 +59,10 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
         }
     }
 
-    let chunks_program = Program::from_source(&display, CHUNKS_VERTEX_SHADER, CHUNKS_FRAGMENT_SHADER, None).unwrap();
-    let entity_program = Program::from_source(&display, ENTITY_VERTEX_SHADER, ENTITY_FRAGMENT_SHADER, None).unwrap();
+    let chunks_program =
+        Program::from_source(&display, CHUNKS_VERTEX_SHADER, CHUNKS_FRAGMENT_SHADER, None).unwrap();
+    let entity_program =
+        Program::from_source(&display, ENTITY_VERTEX_SHADER, ENTITY_FRAGMENT_SHADER, None).unwrap();
 
     let mut params = glium::DrawParameters {
         depth: glium::Depth {
@@ -108,7 +110,10 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
                         locked = false;
                     }
 
-                    WindowEvent::KeyboardInput { input, .. } if matches!(input.virtual_keycode, Some(VirtualKeyCode::Escape)) && matches!(input.state, ElementState::Released) => {
+                    WindowEvent::KeyboardInput { input, .. }
+                        if matches!(input.virtual_keycode, Some(VirtualKeyCode::Escape))
+                            && matches!(input.state, ElementState::Released) =>
+                    {
                         let gl_window = display.gl_window();
                         let window = gl_window.window();
                         let size = window.inner_size();
@@ -119,7 +124,11 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
                         window.set_cursor_grab(locked).unwrap();
                     }
 
-                    WindowEvent::KeyboardInput { input, .. } if locked && camera.move_self(input) => (),
+                    WindowEvent::KeyboardInput { input, .. }
+                        if locked && camera.move_self(input) =>
+                    {
+                        ()
+                    }
 
                     WindowEvent::KeyboardInput { input, .. } if locked => {
                         if let Some(VirtualKeyCode::Semicolon) = input.virtual_keycode {
@@ -150,8 +159,16 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
                     WindowEvent::MouseInput { button, state, .. } if locked => {
                         if state == ElementState::Pressed {
                             match button {
-                                MouseButton::Left => camera.raycast(&display, &mut chunks, RaycastAction::Place(Block::get("solid").unwrap_or_else(Block::air))),
-                                MouseButton::Right => camera.raycast(&display, &mut chunks, RaycastAction::Remove),
+                                MouseButton::Left => camera.raycast(
+                                    &display,
+                                    &mut chunks,
+                                    RaycastAction::Place(
+                                        Block::get("solid").unwrap_or_else(Block::air),
+                                    ),
+                                ),
+                                MouseButton::Right => {
+                                    camera.raycast(&display, &mut chunks, RaycastAction::Remove)
+                                }
 
                                 _ => (),
                             }
@@ -212,7 +229,11 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
                 }
 
                 ServerPacket::NewChunk { chunk } => {
-                    let coords = (chunk.get_chunk_x(), chunk.get_chunk_y(), chunk.get_chunk_z());
+                    let coords = (
+                        chunk.get_chunk_x(),
+                        chunk.get_chunk_y(),
+                        chunk.get_chunk_z(),
+                    );
                     chunks.insert(coords, ChunkWaiter::Chunk(Chunk::from_server_chunk(chunk)));
                     let (x, y, z) = coords;
 
@@ -242,7 +263,9 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
         camera.tick(delta);
         camera.raycast(&display, &mut chunks, RaycastAction::Select);
         if camera.is_moving() {
-            let _ = tx.try_send(UserPacket::MoveSelf { pos: camera.get_pos() });
+            let _ = tx.try_send(UserPacket::MoveSelf {
+                pos: camera.get_pos(),
+            });
             if let Some(light) = lights.get_mut(0) {
                 light.invalidate_chunk_lighting(&mut chunks);
                 light.set_location(camera.get_pos());
@@ -283,7 +306,15 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
                     chunk.populate_lights(&display, &lights);
 
                     if chunk.aabb().is_in_frustum(&frustum) {
-                        chunk.render(&mut target, &chunks_program, perspective, view, &params, &square, &block_textures);
+                        chunk.render(
+                            &mut target,
+                            &chunks_program,
+                            perspective,
+                            view,
+                            &params,
+                            &square,
+                            &block_textures,
+                        );
                     }
                 }
             }
@@ -292,12 +323,19 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
 
         keys.clear();
 
-        let timestamp = SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let timestamp = SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
         for ((x, y, z), chunk) in chunks.iter_mut() {
             if let Some(stamp) = chunk.timestamp() {
                 if timestamp - stamp > 100_000 {
                     *chunk = ChunkWaiter::Timestamp(timestamp);
-                    let _ = tx.try_send(UserPacket::RequestChunk { x: *x, y: *y, z: *z });
+                    let _ = tx.try_send(UserPacket::RequestChunk {
+                        x: *x,
+                        y: *y,
+                        z: *z,
+                    });
                 }
             }
         }
@@ -315,7 +353,11 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
 }
 
 #[tokio::main]
-async fn networking_loop(tx: mpsc::Sender<UserPacket>, rx: mpsc::Receiver<UserPacket>, recv_tx: mpsc::Sender<ServerPacket>) -> std::io::Result<()> {
+async fn networking_loop(
+    tx: mpsc::Sender<UserPacket>,
+    rx: mpsc::Receiver<UserPacket>,
+    recv_tx: mpsc::Sender<ServerPacket>,
+) -> std::io::Result<()> {
     let sock = Arc::new(UdpSocket::bind(ADDRESS).await.unwrap());
     sock.connect("127.0.0.1:6429").await?;
 
@@ -323,8 +365,17 @@ async fn networking_loop(tx: mpsc::Sender<UserPacket>, rx: mpsc::Receiver<UserPa
     receiving(tx, sock, recv_tx).await
 }
 
-async fn transmitting(mut rx: mpsc::Receiver<UserPacket>, sock: Arc<UdpSocket>) -> std::io::Result<()> {
-    sock.send(&bincode::serialize(&UserPacket::ConnectionRequest { name: String::from(USERNAME), }).unwrap()).await?;
+async fn transmitting(
+    mut rx: mpsc::Receiver<UserPacket>,
+    sock: Arc<UdpSocket>,
+) -> std::io::Result<()> {
+    sock.send(
+        &bincode::serialize(&UserPacket::ConnectionRequest {
+            name: String::from(USERNAME),
+        })
+        .unwrap(),
+    )
+    .await?;
 
     while let Some(packet) = rx.recv().await {
         sock.send(&bincode::serialize(&packet).unwrap()).await?;
@@ -333,7 +384,11 @@ async fn transmitting(mut rx: mpsc::Receiver<UserPacket>, sock: Arc<UdpSocket>) 
     Ok(())
 }
 
-async fn receiving(tx: mpsc::Sender<UserPacket>, sock: Arc<UdpSocket>, recv_tx: mpsc::Sender<ServerPacket>) -> std::io::Result<()> {
+async fn receiving(
+    tx: mpsc::Sender<UserPacket>,
+    sock: Arc<UdpSocket>,
+    recv_tx: mpsc::Sender<ServerPacket>,
+) -> std::io::Result<()> {
     let mut buf = Box::new([0; 2usize.pow(20)]);
     loop {
         let len = sock.recv(&mut *buf).await?;
@@ -351,7 +406,10 @@ async fn receiving(tx: mpsc::Sender<UserPacket>, sock: Arc<UdpSocket>, recv_tx: 
             }
 
             ServerPacket::Pong { timestamp } => {
-                let now = SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+                let now = SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos();
                 let duration = now - timestamp;
                 let duration = Duration::from_nanos(duration as u64);
                 println!("Pong! {:?}", duration);
@@ -359,20 +417,32 @@ async fn receiving(tx: mpsc::Sender<UserPacket>, sock: Arc<UdpSocket>, recv_tx: 
 
             ServerPacket::UserJoin { name, pos } => {
                 println!("{} joined the game", name);
-                recv_tx.send(ServerPacket::UserJoin { name, pos }).await.unwrap();
+                recv_tx
+                    .send(ServerPacket::UserJoin { name, pos })
+                    .await
+                    .unwrap();
             }
 
             ServerPacket::UserLeave { name } => {
                 println!("{} left the game", name);
-                recv_tx.send(ServerPacket::UserLeave { name }).await.unwrap();
+                recv_tx
+                    .send(ServerPacket::UserLeave { name })
+                    .await
+                    .unwrap();
             }
 
             ServerPacket::MoveUser { name, pos } => {
-                recv_tx.send(ServerPacket::MoveUser { name, pos }).await.unwrap();
+                recv_tx
+                    .send(ServerPacket::MoveUser { name, pos })
+                    .await
+                    .unwrap();
             }
 
             ServerPacket::NewChunk { chunk } => {
-                recv_tx.send(ServerPacket::NewChunk { chunk }).await.unwrap();
+                recv_tx
+                    .send(ServerPacket::NewChunk { chunk })
+                    .await
+                    .unwrap();
             }
         }
     }
@@ -380,8 +450,11 @@ async fn receiving(tx: mpsc::Sender<UserPacket>, sock: Arc<UdpSocket>, recv_tx: 
 
 async fn ping(tx: mpsc::Sender<UserPacket>) {
     loop {
-        let timestamp = SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
-        tx.send(UserPacket::Ping{ timestamp }).await.unwrap();
+        let timestamp = SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        tx.send(UserPacket::Ping { timestamp }).await.unwrap();
         tokio::time::sleep(Duration::from_secs(1)).await;
     }
 }

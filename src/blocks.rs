@@ -1,8 +1,11 @@
-use std::{sync::RwLock, collections::HashMap, iter::repeat};
+use std::{collections::HashMap, iter::repeat, sync::RwLock};
 
-use glium::{texture::{RawImage2d, SrgbTexture3d, RawImage3d}, Display};
+use glium::{
+    texture::{RawImage2d, RawImage3d, SrgbTexture3d},
+    Display,
+};
 use image::GenericImageView;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use crate::client::chunk::BlockTextures;
 
@@ -32,20 +35,82 @@ pub enum FaceDirection {
 impl Block {
     pub fn register_defaults() {
         Block::register(String::from("air"), BlockData::new(false, vec![]));
-        Block::register(String::from("grass"), BlockData::new(true, vec![
-            (String::from("assets/textures/PNG/Tiles/grass_top.png"), vec![FaceDirection::Up]),
-            (String::from("assets/textures/PNG/Tiles/dirt_grass.png"), vec![FaceDirection::Front, FaceDirection::Back, FaceDirection::Left, FaceDirection::Right]),
-            (String::from("assets/textures/PNG/Tiles/dirt.png"), vec![FaceDirection::Down]),
-        ]));
-        Block::register(String::from("dirt"), BlockData::new(true, vec![
-            (String::from("assets/textures/PNG/Tiles/dirt.png"), vec![FaceDirection::Up, FaceDirection::Down, FaceDirection::Left, FaceDirection::Right, FaceDirection::Front, FaceDirection::Back]),
-        ]));
-        Block::register(String::from("stone"), BlockData::new(true, vec![
-            (String::from("assets/textures/PNG/Tiles/stone.png"), vec![FaceDirection::Up, FaceDirection::Down, FaceDirection::Left, FaceDirection::Right, FaceDirection::Front, FaceDirection::Back]),
-        ]));
-        Block::register(String::from("coal_ore"), BlockData::new(true, vec![
-            (String::from("assets/textures/PNG/Tiles/stone_coal.png"), vec![FaceDirection::Up, FaceDirection::Down, FaceDirection::Left, FaceDirection::Right, FaceDirection::Front, FaceDirection::Back]),
-        ]));
+        Block::register(
+            String::from("grass"),
+            BlockData::new(
+                true,
+                vec![
+                    (
+                        String::from("assets/textures/PNG/Tiles/grass_top.png"),
+                        vec![FaceDirection::Up],
+                    ),
+                    (
+                        String::from("assets/textures/PNG/Tiles/dirt_grass.png"),
+                        vec![
+                            FaceDirection::Front,
+                            FaceDirection::Back,
+                            FaceDirection::Left,
+                            FaceDirection::Right,
+                        ],
+                    ),
+                    (
+                        String::from("assets/textures/PNG/Tiles/dirt.png"),
+                        vec![FaceDirection::Down],
+                    ),
+                ],
+            ),
+        );
+        Block::register(
+            String::from("dirt"),
+            BlockData::new(
+                true,
+                vec![(
+                    String::from("assets/textures/PNG/Tiles/dirt.png"),
+                    vec![
+                        FaceDirection::Up,
+                        FaceDirection::Down,
+                        FaceDirection::Left,
+                        FaceDirection::Right,
+                        FaceDirection::Front,
+                        FaceDirection::Back,
+                    ],
+                )],
+            ),
+        );
+        Block::register(
+            String::from("stone"),
+            BlockData::new(
+                true,
+                vec![(
+                    String::from("assets/textures/PNG/Tiles/stone.png"),
+                    vec![
+                        FaceDirection::Up,
+                        FaceDirection::Down,
+                        FaceDirection::Left,
+                        FaceDirection::Right,
+                        FaceDirection::Front,
+                        FaceDirection::Back,
+                    ],
+                )],
+            ),
+        );
+        Block::register(
+            String::from("coal_ore"),
+            BlockData::new(
+                true,
+                vec![(
+                    String::from("assets/textures/PNG/Tiles/stone_coal.png"),
+                    vec![
+                        FaceDirection::Up,
+                        FaceDirection::Down,
+                        FaceDirection::Left,
+                        FaceDirection::Right,
+                        FaceDirection::Front,
+                        FaceDirection::Back,
+                    ],
+                )],
+            ),
+        );
     }
 
     pub fn generate_atlas(display: &Display) -> BlockTextures {
@@ -68,7 +133,12 @@ impl Block {
         if let Some(texture) = textures.get(1) {
             let width = texture.width;
             let height = texture.height;
-            textures[0] = RawImage2d::from_raw_rgba_reversed(&repeat(0u8).take(width as usize * height as usize * 4).collect::<Vec<_>>(), (width, height));
+            textures[0] = RawImage2d::from_raw_rgba_reversed(
+                &repeat(0u8)
+                    .take(width as usize * height as usize * 4)
+                    .collect::<Vec<_>>(),
+                (width, height),
+            );
         }
 
         let texture_count = textures.len() as u32;
@@ -104,11 +174,19 @@ impl Block {
     }
 
     pub fn get_texture(&self, face: FaceDirection) -> Option<u32> {
-        BLOCK_DATA_MAP.read().unwrap().get(self.0 as usize).map(|v| v.textures[face as usize])
+        BLOCK_DATA_MAP
+            .read()
+            .unwrap()
+            .get(self.0 as usize)
+            .map(|v| v.textures[face as usize])
     }
 
     pub fn is_solid(&self) -> Option<bool> {
-        BLOCK_DATA_MAP.read().unwrap().get(self.0 as usize).map(|v| v.solid)
+        BLOCK_DATA_MAP
+            .read()
+            .unwrap()
+            .get(self.0 as usize)
+            .map(|v| v.solid)
     }
 }
 

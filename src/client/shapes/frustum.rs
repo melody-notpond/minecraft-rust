@@ -28,8 +28,9 @@ pub struct Aabb {
 
 impl Aabb {
     fn is_on_or_forward_plane(&self, plane: &Plane) -> bool {
-        let r = self.extents[0] * plane.normal[0].abs() +
-                self.extents[1] * plane.normal[1].abs() + self.extents[2] * plane.normal[2].abs();
+        let r = self.extents[0] * plane.normal[0].abs()
+            + self.extents[1] * plane.normal[1].abs()
+            + self.extents[2] * plane.normal[2].abs();
 
         -r <= plane.get_signed_distance_to_plan(self.centre)
     }
@@ -37,10 +38,10 @@ impl Aabb {
     pub fn is_in_frustum(&self, frustum: &Frustum) -> bool {
         true
         //self.is_on_or_forward_plane(&frustum.near)
-            //&& self.is_on_or_forward_plane(&frustum.far)
-            //&& self.is_on_or_forward_plane(&frustum.left)
-            //&& self.is_on_or_forward_plane(&frustum.right)
-            //&& self.is_on_or_forward_plane(&frustum.top)
-            //&& self.is_on_or_forward_plane(&frustum.bottom)
+        //&& self.is_on_or_forward_plane(&frustum.far)
+        //&& self.is_on_or_forward_plane(&frustum.left)
+        //&& self.is_on_or_forward_plane(&frustum.right)
+        //&& self.is_on_or_forward_plane(&frustum.top)
+        //&& self.is_on_or_forward_plane(&frustum.bottom)
     }
 }

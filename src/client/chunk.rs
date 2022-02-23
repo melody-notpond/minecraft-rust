@@ -2,16 +2,16 @@ use std::collections::HashMap;
 
 use glium::index::PrimitiveType;
 use glium::texture::SrgbTexture3d;
-use glium::uniforms::{Sampler, MinifySamplerFilter, MagnifySamplerFilter};
+use glium::uniforms::{MagnifySamplerFilter, MinifySamplerFilter, Sampler};
 use glium::{Display, DrawParameters, Frame, IndexBuffer, Program, Surface, VertexBuffer};
 
 use crate::blocks::FaceDirection;
 
+use super::super::blocks::{Block, CHUNK_SIZE};
+use super::super::server::chunk::Chunk as ServerChunk;
 use super::light::LightSource;
 use super::shapes::frustum::Aabb;
 use super::shapes::{Normal, Position, TexCoord};
-use super::super::blocks::{Block, CHUNK_SIZE};
-use super::super::server::chunk::Chunk as ServerChunk;
 
 const NORM_UP: Normal = Normal {
     normal: [0.0, 1.0, 0.0],
@@ -47,17 +47,9 @@ const SQUARE_TEX_COORDS: [TexCoord; 4] = [
     },
 ];
 
-const SQUARE_NORMALS: [Normal; 4] = [
-    NORM_UP,
-    NORM_UP,
-    NORM_UP,
-    NORM_UP,
-];
+const SQUARE_NORMALS: [Normal; 4] = [NORM_UP, NORM_UP, NORM_UP, NORM_UP];
 
-const SQUARE_INDICES: [u32; 6] = [
-    0, 1, 2,
-    1, 3, 2,
-];
+const SQUARE_INDICES: [u32; 6] = [0, 1, 2, 1, 3, 2];
 
 #[derive(Debug)]
 pub struct Mesh {
@@ -72,12 +64,8 @@ impl Mesh {
         let positions = VertexBuffer::new(display, &SQUARE_POSITIONS).unwrap();
         let tex_coords = VertexBuffer::new(display, &SQUARE_TEX_COORDS).unwrap();
         let normals = VertexBuffer::new(display, &SQUARE_NORMALS).unwrap();
-        let indices = IndexBuffer::new(
-            display,
-            PrimitiveType::TrianglesList,
-            &SQUARE_INDICES,
-        )
-        .unwrap();
+        let indices =
+            IndexBuffer::new(display, PrimitiveType::TrianglesList, &SQUARE_INDICES).unwrap();
 
         Mesh {
             positions,
@@ -108,7 +96,9 @@ implement_vertex!(InstanceData, data);
 
 impl InstanceData {
     fn new(dir: FaceDirection, block: Block, x: u32, y: u32, z: u32) -> InstanceData {
-        let mut data = InstanceData { data: (0, block.get_texture(dir).unwrap_or(0)) };
+        let mut data = InstanceData {
+            data: (0, block.get_texture(dir).unwrap_or(0)),
+        };
         data.set_direction(dir);
         data.set_x(x);
         data.set_y(y);
@@ -168,7 +158,7 @@ implement_vertex!(Light, light);
 impl Light {
     fn new(red: u32, green: u32, blue: u32) -> Light {
         Light {
-            light: ((red & 0xf) << 12) | ((green & 0xf) << 8) | ((blue & 0xf) << 4)
+            light: ((red & 0xf) << 12) | ((green & 0xf) << 8) | ((blue & 0xf) << 4),
         }
     }
 }
@@ -206,7 +196,11 @@ impl Chunk {
             lights: None,
             selected: None,
             aabb: Aabb {
-                centre: [chunk.get_chunk_x() as f32 * CHUNK_SIZE as f32 * 0.5 + CHUNK_SIZE as f32 * 0.25, chunk.get_chunk_y() as f32 *  CHUNK_SIZE as f32 * 0.5 + CHUNK_SIZE as f32 * 0.25, chunk.get_chunk_z() as f32 * CHUNK_SIZE as f32 * 0.5 + CHUNK_SIZE as f32 * 0.25],
+                centre: [
+                    chunk.get_chunk_x() as f32 * CHUNK_SIZE as f32 * 0.5 + CHUNK_SIZE as f32 * 0.25,
+                    chunk.get_chunk_y() as f32 * CHUNK_SIZE as f32 * 0.5 + CHUNK_SIZE as f32 * 0.25,
+                    chunk.get_chunk_z() as f32 * CHUNK_SIZE as f32 * 0.5 + CHUNK_SIZE as f32 * 0.25,
+                ],
                 extents: [CHUNK_SIZE as f32 * 0.25; 3],
             },
             loaded: true,
@@ -214,7 +208,11 @@ impl Chunk {
     }
 
     pub fn world_to_chunk_coords(x: f32, y: f32, z: f32) -> (i32, i32, i32, usize, usize, usize) {
-        let mut block_coords = [(x * 2.0).round() as i32, (y * 2.0).round() as i32, (z * 2.0).round() as i32];
+        let mut block_coords = [
+            (x * 2.0).round() as i32,
+            (y * 2.0).round() as i32,
+            (z * 2.0).round() as i32,
+        ];
 
         if block_coords[0] < 0 {
             block_coords[0] -= CHUNK_SIZE as i32 - 1;
@@ -226,7 +224,11 @@ impl Chunk {
             block_coords[2] -= CHUNK_SIZE as i32 - 1;
         }
 
-        let (chunk_x, chunk_y, chunk_z) = (block_coords[0] / CHUNK_SIZE as i32, block_coords[1] / CHUNK_SIZE as i32, block_coords[2] / CHUNK_SIZE as i32);
+        let (chunk_x, chunk_y, chunk_z) = (
+            block_coords[0] / CHUNK_SIZE as i32,
+            block_coords[1] / CHUNK_SIZE as i32,
+            block_coords[2] / CHUNK_SIZE as i32,
+        );
 
         if block_coords[0] < 0 {
             block_coords[0] += CHUNK_SIZE as i32 - 1;
@@ -238,7 +240,11 @@ impl Chunk {
             block_coords[2] += CHUNK_SIZE as i32 - 1;
         }
 
-        let (mut x, mut y, mut z) = (block_coords[0] % CHUNK_SIZE as i32, block_coords[1] % CHUNK_SIZE as i32, block_coords[2] % CHUNK_SIZE as i32);
+        let (mut x, mut y, mut z) = (
+            block_coords[0] % CHUNK_SIZE as i32,
+            block_coords[1] % CHUNK_SIZE as i32,
+            block_coords[2] % CHUNK_SIZE as i32,
+        );
         if x < 0 {
             x += CHUNK_SIZE as i32;
         }
@@ -265,24 +271,59 @@ impl Chunk {
         &mut self.blocks[x][y][z]
     }
 
-    fn get_block<'a>(&'a self, chunks: &'a HashMap<(i32, i32, i32), ChunkWaiter>, x: isize, y: isize, z: isize) -> Block {
+    fn get_block<'a>(
+        &'a self,
+        chunks: &'a HashMap<(i32, i32, i32), ChunkWaiter>,
+        x: isize,
+        y: isize,
+        z: isize,
+    ) -> Block {
         if x < 0 {
-            chunks.get(&(self.chunk_x - 1, self.chunk_y, self.chunk_z)).and_then(ChunkWaiter::chunk).map(|v| v.blocks[CHUNK_SIZE - 1][y as usize][z as usize]).unwrap_or_else(Block::air)
+            chunks
+                .get(&(self.chunk_x - 1, self.chunk_y, self.chunk_z))
+                .and_then(ChunkWaiter::chunk)
+                .map(|v| v.blocks[CHUNK_SIZE - 1][y as usize][z as usize])
+                .unwrap_or_else(Block::air)
         } else if x > CHUNK_SIZE as isize - 1 {
-            chunks.get(&(self.chunk_x + 1, self.chunk_y, self.chunk_z)).and_then(ChunkWaiter::chunk).map(|v| v.blocks[0][y as usize][z as usize]).unwrap_or_else(Block::air) } else if y < 0 {
-            chunks.get(&(self.chunk_x, self.chunk_y - 1, self.chunk_z)).and_then(ChunkWaiter::chunk).map(|v| v.blocks[x as usize][CHUNK_SIZE - 1][z as usize]).unwrap_or_else(Block::air)
+            chunks
+                .get(&(self.chunk_x + 1, self.chunk_y, self.chunk_z))
+                .and_then(ChunkWaiter::chunk)
+                .map(|v| v.blocks[0][y as usize][z as usize])
+                .unwrap_or_else(Block::air)
+        } else if y < 0 {
+            chunks
+                .get(&(self.chunk_x, self.chunk_y - 1, self.chunk_z))
+                .and_then(ChunkWaiter::chunk)
+                .map(|v| v.blocks[x as usize][CHUNK_SIZE - 1][z as usize])
+                .unwrap_or_else(Block::air)
         } else if y > CHUNK_SIZE as isize - 1 {
-            chunks.get(&(self.chunk_x, self.chunk_y + 1, self.chunk_z)).and_then(ChunkWaiter::chunk).map(|v| v.blocks[x as usize][0][z as usize]).unwrap_or_else(Block::air)
+            chunks
+                .get(&(self.chunk_x, self.chunk_y + 1, self.chunk_z))
+                .and_then(ChunkWaiter::chunk)
+                .map(|v| v.blocks[x as usize][0][z as usize])
+                .unwrap_or_else(Block::air)
         } else if z < 0 {
-            chunks.get(&(self.chunk_x, self.chunk_y, self.chunk_z - 1)).and_then(ChunkWaiter::chunk).map(|v| v.blocks[x as usize][y as usize][CHUNK_SIZE - 1]).unwrap_or_else(Block::air)
+            chunks
+                .get(&(self.chunk_x, self.chunk_y, self.chunk_z - 1))
+                .and_then(ChunkWaiter::chunk)
+                .map(|v| v.blocks[x as usize][y as usize][CHUNK_SIZE - 1])
+                .unwrap_or_else(Block::air)
         } else if z > CHUNK_SIZE as isize - 1 {
-            chunks.get(&(self.chunk_x, self.chunk_y, self.chunk_z + 1)).and_then(ChunkWaiter::chunk).map(|v| v.blocks[x as usize][y as usize][0]).unwrap_or_else(Block::air)
+            chunks
+                .get(&(self.chunk_x, self.chunk_y, self.chunk_z + 1))
+                .and_then(ChunkWaiter::chunk)
+                .map(|v| v.blocks[x as usize][y as usize][0])
+                .unwrap_or_else(Block::air)
         } else {
             self.blocks[x as usize][y as usize][z as usize]
         }
     }
 
-    pub fn generate_mesh(&mut self, display: &Display, chunks: &HashMap<(i32, i32, i32), ChunkWaiter>) -> bool {
+    pub fn generate_mesh(
+        &mut self,
+        display: &Display,
+        chunks: &HashMap<(i32, i32, i32), ChunkWaiter>,
+    ) -> bool {
         if self.mesh_raw.is_some() {
             return false;
         }
@@ -298,34 +339,72 @@ impl Chunk {
                     let block = self.get_block(chunks, x, y, z);
                     if block.is_solid().unwrap_or(false) {
                         if self.get_block(chunks, x, y + 1, z) == Block::air() {
-                            instance_data.push(InstanceData::new(FaceDirection::Up, block, x as u32, y as u32, z as u32));
+                            instance_data.push(InstanceData::new(
+                                FaceDirection::Up,
+                                block,
+                                x as u32,
+                                y as u32,
+                                z as u32,
+                            ));
                         }
 
                         if self.get_block(chunks, x, y - 1, z) == Block::air() {
-                            instance_data.push(InstanceData::new(FaceDirection::Down, block, x as u32, y as u32, z as u32));
+                            instance_data.push(InstanceData::new(
+                                FaceDirection::Down,
+                                block,
+                                x as u32,
+                                y as u32,
+                                z as u32,
+                            ));
                         }
 
                         if self.get_block(chunks, x + 1, y, z) == Block::air() {
-                            instance_data.push(InstanceData::new(FaceDirection::Front, block, x as u32, y as u32, z as u32));
+                            instance_data.push(InstanceData::new(
+                                FaceDirection::Front,
+                                block,
+                                x as u32,
+                                y as u32,
+                                z as u32,
+                            ));
                         }
 
                         if self.get_block(chunks, x - 1, y, z) == Block::air() {
-                            instance_data.push(InstanceData::new(FaceDirection::Back, block, x as u32, y as u32, z as u32));
+                            instance_data.push(InstanceData::new(
+                                FaceDirection::Back,
+                                block,
+                                x as u32,
+                                y as u32,
+                                z as u32,
+                            ));
                         }
 
                         if self.get_block(chunks, x, y, z + 1) == Block::air() {
-                            instance_data.push(InstanceData::new(FaceDirection::Left, block, x as u32, y as u32, z as u32));
+                            instance_data.push(InstanceData::new(
+                                FaceDirection::Left,
+                                block,
+                                x as u32,
+                                y as u32,
+                                z as u32,
+                            ));
                         }
 
                         if self.get_block(chunks, x, y, z - 1) == Block::air() {
-                            instance_data.push(InstanceData::new(FaceDirection::Right, block, x as u32, y as u32, z as u32));
+                            instance_data.push(InstanceData::new(
+                                FaceDirection::Right,
+                                block,
+                                x as u32,
+                                y as u32,
+                                z as u32,
+                            ));
                         }
                     }
                 }
             }
         }
 
-        self.mesh = Some(Box::new(VertexBuffer::new(display, &instance_data).unwrap()));
+        self.mesh = Some(Box::new(
+            VertexBuffer::new(display, &instance_data).unwrap(),
+        ));
         self.mesh_raw = Some(instance_data);
         true
     }
@@ -349,7 +428,12 @@ impl Chunk {
                 let mut blue = 0;
 
                 for light in lights {
-                    let (dred, dgreen, dblue) = light.calculate_light_intensity(self.chunk_x * CHUNK_SIZE as i32 + x, self.chunk_y * CHUNK_SIZE as i32 + y, self.chunk_z * CHUNK_SIZE as i32 + z, dir);
+                    let (dred, dgreen, dblue) = light.calculate_light_intensity(
+                        self.chunk_x * CHUNK_SIZE as i32 + x,
+                        self.chunk_y * CHUNK_SIZE as i32 + y,
+                        self.chunk_z * CHUNK_SIZE as i32 + z,
+                        dir,
+                    );
                     red += dred;
                     green += dgreen;
                     blue += dblue;
@@ -401,12 +485,20 @@ impl Chunk {
 
                     target
                         .draw(
-                            (&square.positions, &square.tex_coords, &square.normals, data.per_instance().unwrap(), lights.per_instance().unwrap(), selected.per_instance().unwrap()),
+                            (
+                                &square.positions,
+                                &square.tex_coords,
+                                &square.normals,
+                                data.per_instance().unwrap(),
+                                lights.per_instance().unwrap(),
+                                selected.per_instance().unwrap(),
+                            ),
                             &square.indices,
                             program,
                             &uniforms,
                             params,
-                        ).unwrap();
+                        )
+                        .unwrap();
                 }
             }
         }

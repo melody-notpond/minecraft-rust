@@ -1,8 +1,23 @@
-use std::{collections::{HashMap, HashSet, hash_map::Entry}, io, net::SocketAddr, sync::Arc};
+use std::{
+    collections::{hash_map::Entry, HashMap, HashSet},
+    io,
+    net::SocketAddr,
+    sync::Arc,
+};
 
-use tokio::{net::UdpSocket, sync::{mpsc, Mutex}};
+use tokio::{
+    net::UdpSocket,
+    sync::{mpsc, Mutex},
+};
 
-use minecraft_rust::{packet::{ServerPacket, UserPacket}, server::{chunk::{Chunk, PerlinChunkGenerator}, player::Player}, blocks::Block};
+use minecraft_rust::{
+    blocks::Block,
+    packet::{ServerPacket, UserPacket},
+    server::{
+        chunk::{Chunk, PerlinChunkGenerator},
+        player::Player,
+    },
+};
 
 const BIND: &str = "127.0.0.1:6429";
 
@@ -12,7 +27,8 @@ async fn main() -> io::Result<()> {
     let run2 = run.clone();
     ctrlc::set_handler(move || {
         *run2.blocking_lock() = false;
-    }).unwrap();
+    })
+    .unwrap();
 
     Block::register_defaults();
     let sock = Arc::new(UdpSocket::bind(BIND).await.unwrap());
@@ -24,21 +40,39 @@ async fn main() -> io::Result<()> {
 
     println!("Server started");
     tokio::spawn(transmitting(packet_rx, sock.clone()));
-    tokio::spawn(receiving(packet_tx.clone(), sock.clone(), players.clone(), player_names, chunk_tx));
+    tokio::spawn(receiving(
+        packet_tx.clone(),
+        sock.clone(),
+        players.clone(),
+        player_names,
+        chunk_tx,
+    ));
     tokio::spawn(chunk_generator(packet_tx.clone(), chunk_rx, chunks.clone()));
 
-    while *run.lock().await { }
+    while *run.lock().await {}
 
     println!("Closing server");
     for (_, player) in players.lock().await.iter() {
-        packet_tx.send((player.addr, ServerPacket::Disconnected { reason: String::from("Server closed") })).await.unwrap();
+        packet_tx
+            .send((
+                player.addr,
+                ServerPacket::Disconnected {
+                    reason: String::from("Server closed"),
+                },
+            ))
+            .await
+            .unwrap();
     }
 
     Ok(())
 }
 
 #[allow(clippy::type_complexity)]
-async fn chunk_generator(tx: mpsc::Sender<(SocketAddr, ServerPacket)>, mut rx: mpsc::Receiver<(SocketAddr, UserPacket)>, chunks: Arc<Mutex<HashMap<(i32, i32, i32), Chunk>>>) {
+async fn chunk_generator(
+    tx: mpsc::Sender<(SocketAddr, ServerPacket)>,
+    mut rx: mpsc::Receiver<(SocketAddr, UserPacket)>,
+    chunks: Arc<Mutex<HashMap<(i32, i32, i32), Chunk>>>,
+) {
     let mut gen = PerlinChunkGenerator::default();
 
     while let Some((addr, packet)) = rx.recv().await {
@@ -54,13 +88,22 @@ async fn chunk_generator(tx: mpsc::Sender<(SocketAddr, ServerPacket)>, mut rx: m
                 match chunks.entry(coords) {
                     Entry::Occupied(e) => {
                         let chunk = e.get();
-                        tx.send((addr, ServerPacket::NewChunk { chunk: chunk.clone() })).await.unwrap();
+                        tx.send((
+                            addr,
+                            ServerPacket::NewChunk {
+                                chunk: chunk.clone(),
+                            },
+                        ))
+                        .await
+                        .unwrap();
                     }
 
                     Entry::Vacant(e) => {
                         let chunk = Chunk::new(x, y, z, &mut gen);
                         e.insert(chunk.clone());
-                        tx.send((addr, ServerPacket::NewChunk { chunk })).await.unwrap();
+                        tx.send((addr, ServerPacket::NewChunk { chunk }))
+                            .await
+                            .unwrap();
                     }
                 }
             }
@@ -68,7 +111,10 @@ async fn chunk_generator(tx: mpsc::Sender<(SocketAddr, ServerPacket)>, mut rx: m
     }
 }
 
-async fn transmitting(mut rx: mpsc::Receiver<(SocketAddr, ServerPacket)>, sock: Arc<UdpSocket>) -> io::Result<()> {
+async fn transmitting(
+    mut rx: mpsc::Receiver<(SocketAddr, ServerPacket)>,
+    sock: Arc<UdpSocket>,
+) -> io::Result<()> {
     while let Some((addr, packet)) = rx.recv().await {
         let buf = bincode::serialize(&packet).unwrap();
         let send = sock.send_to(&buf, addr).await;
@@ -81,7 +127,13 @@ async fn transmitting(mut rx: mpsc::Receiver<(SocketAddr, ServerPacket)>, sock: 
     Ok(())
 }
 
-async fn receiving(packet_tx: mpsc::Sender<(SocketAddr, ServerPacket)>, sock: Arc<UdpSocket>, players: Arc<Mutex<HashMap<SocketAddr, Player>>>, mut player_names: HashSet<String>, chunk_tx: mpsc::Sender<(SocketAddr, UserPacket)>) -> io::Result<()> {
+async fn receiving(
+    packet_tx: mpsc::Sender<(SocketAddr, ServerPacket)>,
+    sock: Arc<UdpSocket>,
+    players: Arc<Mutex<HashMap<SocketAddr, Player>>>,
+    mut player_names: HashSet<String>,
+    chunk_tx: mpsc::Sender<(SocketAddr, UserPacket)>,
+) -> io::Result<()> {
     let mut buf = Box::new([0; 4096]);
 
     loop {
@@ -94,11 +146,22 @@ async fn receiving(packet_tx: mpsc::Sender<(SocketAddr, ServerPacket)>, sock: Ar
 
                 if player_names.contains(&name) {
                     println!("Duplicate connection for {} at address {}", name, addr);
-                    packet_tx.send((addr, ServerPacket::Disconnected { reason: format!("Player {} is already on the server!", name) })).await.unwrap();
+                    packet_tx
+                        .send((
+                            addr,
+                            ServerPacket::Disconnected {
+                                reason: format!("Player {} is already on the server!", name),
+                            },
+                        ))
+                        .await
+                        .unwrap();
                 } else if let Entry::Vacant(e) = players.entry(addr) {
                     println!("Connection requested from {} at address {}", name, addr);
 
-                    packet_tx.send((addr, ServerPacket::ConnectionAccepted)).await.unwrap();
+                    packet_tx
+                        .send((addr, ServerPacket::ConnectionAccepted))
+                        .await
+                        .unwrap();
 
                     let position = [0.0, 0.0, 0.0];
                     e.insert(Player {
@@ -109,15 +172,41 @@ async fn receiving(packet_tx: mpsc::Sender<(SocketAddr, ServerPacket)>, sock: Ar
 
                     for (_, player) in players.iter() {
                         if player.addr != addr {
-                            packet_tx.send((player.addr, ServerPacket::UserJoin { name: name.clone(), pos: position, })).await.unwrap();
-                            packet_tx.send((addr, ServerPacket::UserJoin { name: player.name.clone(), pos: player.position, })).await.unwrap();
+                            packet_tx
+                                .send((
+                                    player.addr,
+                                    ServerPacket::UserJoin {
+                                        name: name.clone(),
+                                        pos: position,
+                                    },
+                                ))
+                                .await
+                                .unwrap();
+                            packet_tx
+                                .send((
+                                    addr,
+                                    ServerPacket::UserJoin {
+                                        name: player.name.clone(),
+                                        pos: player.position,
+                                    },
+                                ))
+                                .await
+                                .unwrap();
                         }
                     }
 
                     player_names.insert(name);
                 } else {
                     println!("Duplicate connection for address {} by {}", addr, name);
-                    packet_tx.send((addr, ServerPacket::Disconnected { reason: String::from("Address already in use") })).await.unwrap();
+                    packet_tx
+                        .send((
+                            addr,
+                            ServerPacket::Disconnected {
+                                reason: String::from("Address already in use"),
+                            },
+                        ))
+                        .await
+                        .unwrap();
                 }
             }
 
@@ -125,18 +214,32 @@ async fn receiving(packet_tx: mpsc::Sender<(SocketAddr, ServerPacket)>, sock: Ar
                 let mut players = players.lock().await;
 
                 if let Some(player) = players.remove(&addr) {
-                    println!("Player {} at address {} disconnected from the server", player.name, addr);
+                    println!(
+                        "Player {} at address {} disconnected from the server",
+                        player.name, addr
+                    );
                     player_names.remove(&player.name);
 
                     for (_, player2) in players.iter() {
-                        packet_tx.send((player2.addr, ServerPacket::UserLeave { name: player.name.clone() })).await.unwrap();
+                        packet_tx
+                            .send((
+                                player2.addr,
+                                ServerPacket::UserLeave {
+                                    name: player.name.clone(),
+                                },
+                            ))
+                            .await
+                            .unwrap();
                     }
                 }
             }
 
             UserPacket::Ping { timestamp } => {
                 if players.lock().await.contains_key(&addr) {
-                    packet_tx.send((addr, ServerPacket::Pong { timestamp })).await.unwrap();
+                    packet_tx
+                        .send((addr, ServerPacket::Pong { timestamp }))
+                        .await
+                        .unwrap();
                     println!("Ping! ({})", addr);
                 }
             }
@@ -144,18 +247,32 @@ async fn receiving(packet_tx: mpsc::Sender<(SocketAddr, ServerPacket)>, sock: Ar
             UserPacket::MoveSelf { pos } => {
                 let mut players = players.lock().await;
                 if let Some(mut player) = players.remove(&addr) {
-                    println!("Player {} moved from {:?} to {:?}", player.name, player.position, pos);
+                    println!(
+                        "Player {} moved from {:?} to {:?}",
+                        player.name, player.position, pos
+                    );
                     player.position = pos;
 
                     for (_, player2) in players.iter() {
-                        packet_tx.send((player2.addr, ServerPacket::MoveUser { name: player.name.clone(), pos: player.position })).await.unwrap();
+                        packet_tx
+                            .send((
+                                player2.addr,
+                                ServerPacket::MoveUser {
+                                    name: player.name.clone(),
+                                    pos: player.position,
+                                },
+                            ))
+                            .await
+                            .unwrap();
                     }
 
                     players.insert(addr, player);
                 }
             }
-            UserPacket::RequestChunk { x, y, z } => chunk_tx.send((addr, UserPacket::RequestChunk { x, y, z })).await.unwrap(),
+            UserPacket::RequestChunk { x, y, z } => chunk_tx
+                .send((addr, UserPacket::RequestChunk { x, y, z }))
+                .await
+                .unwrap(),
         }
     }
 }
-

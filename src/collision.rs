@@ -26,4 +26,3 @@ impl DetectCollision<Aabb> for Aabb {
         collision_x && collision_y && collision_z
     }
 }
-

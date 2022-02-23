@@ -1,14 +1,24 @@
-use std::{time::Duration, convert::TryInto, collections::{HashMap, hash_map::Entry}};
+use std::{
+    collections::{hash_map::Entry, HashMap},
+    convert::TryInto,
+    time::Duration,
+};
 
 use glium::{
     glutin::event::{ElementState, KeyboardInput, VirtualKeyCode},
-    Frame, Surface, Display,
+    Display, Frame, Surface,
 };
 use nalgebra::Vector3;
 
-use crate::{blocks::{Block, CHUNK_SIZE}, collision::Aabb};
+use crate::{
+    blocks::{Block, CHUNK_SIZE},
+    collision::Aabb,
+};
 
-use super::{shapes::frustum::{Frustum, Plane}, chunk::{ChunkWaiter, Chunk}};
+use super::{
+    chunk::{Chunk, ChunkWaiter},
+    shapes::frustum::{Frustum, Plane},
+};
 
 #[derive(Clone, Debug)]
 pub struct Camera {
@@ -46,7 +56,11 @@ impl Camera {
 
     pub fn aabb(&self) -> Aabb {
         Aabb {
-            centre: [self.position[0] + 0.5, self.position[1] + 1.0, self.position[2] + 0.5],
+            centre: [
+                self.position[0] + 0.5,
+                self.position[1] + 1.0,
+                self.position[2] + 0.5,
+            ],
             extents: [0.5, 1.0, 0.5],
         }
     }
@@ -201,19 +215,35 @@ impl Camera {
 
         let mut frustum = Frustum {
             top: Plane {
-                normal: right.cross(&(front_mult_far - up * half_v_side)).normalize().try_into().unwrap(),
+                normal: right
+                    .cross(&(front_mult_far - up * half_v_side))
+                    .normalize()
+                    .try_into()
+                    .unwrap(),
                 distance: 0.0,
             },
             bottom: Plane {
-                normal: (front_mult_far + up * half_v_side).cross(&right).normalize().try_into().unwrap(),
+                normal: (front_mult_far + up * half_v_side)
+                    .cross(&right)
+                    .normalize()
+                    .try_into()
+                    .unwrap(),
                 distance: 0.0,
             },
             left: Plane {
-                normal: (front_mult_far - right * half_h_side).cross(&up).normalize().try_into().unwrap(),
+                normal: (front_mult_far - right * half_h_side)
+                    .cross(&up)
+                    .normalize()
+                    .try_into()
+                    .unwrap(),
                 distance: 0.0,
             },
             right: Plane {
-                normal: up.cross(&(front_mult_far + right * half_h_side)).normalize().try_into().unwrap(),
+                normal: up
+                    .cross(&(front_mult_far + right * half_h_side))
+                    .normalize()
+                    .try_into()
+                    .unwrap(),
                 distance: 0.0,
             },
             far: Plane {
@@ -227,21 +257,41 @@ impl Camera {
         };
 
         frustum.near.distance = (Vector3::from(self.position) + self.z_near * front).norm();
-        frustum.far.distance = Vector3::from(frustum.far.normal).dot(&(Vector3::from(self.position) + front_mult_far)).abs();
-        frustum.left.distance = Vector3::from(frustum.left.normal).dot(&Vector3::from(self.position)).abs();
-        frustum.right.distance = Vector3::from(frustum.right.normal).dot(&Vector3::from(self.position)).abs();
-        frustum.top.distance = Vector3::from(frustum.top.normal).dot(&Vector3::from(self.position)).abs();
-        frustum.bottom.distance = Vector3::from(frustum.bottom.normal).dot(&Vector3::from(self.position)).abs();
+        frustum.far.distance = Vector3::from(frustum.far.normal)
+            .dot(&(Vector3::from(self.position) + front_mult_far))
+            .abs();
+        frustum.left.distance = Vector3::from(frustum.left.normal)
+            .dot(&Vector3::from(self.position))
+            .abs();
+        frustum.right.distance = Vector3::from(frustum.right.normal)
+            .dot(&Vector3::from(self.position))
+            .abs();
+        frustum.top.distance = Vector3::from(frustum.top.normal)
+            .dot(&Vector3::from(self.position))
+            .abs();
+        frustum.bottom.distance = Vector3::from(frustum.bottom.normal)
+            .dot(&Vector3::from(self.position))
+            .abs();
 
         frustum
     }
 
-    pub fn raycast(&self, display: &Display, chunks: &mut HashMap<(i32, i32, i32), ChunkWaiter>, action: RaycastAction) {
+    pub fn raycast(
+        &self,
+        display: &Display,
+        chunks: &mut HashMap<(i32, i32, i32), ChunkWaiter>,
+        action: RaycastAction,
+    ) {
         let mut pos = self.position;
 
         for _ in 0..16 {
-            pos = [pos[0] + self.direction[0] * 0.25, pos[1] + self.direction[1] * 0.25, pos[2] + self.direction[2] * 0.25];
-            let (chunk_x, chunk_y, chunk_z, x, y, z) = Chunk::world_to_chunk_coords(pos[0], pos[1], pos[2]);
+            pos = [
+                pos[0] + self.direction[0] * 0.25,
+                pos[1] + self.direction[1] * 0.25,
+                pos[2] + self.direction[2] * 0.25,
+            ];
+            let (chunk_x, chunk_y, chunk_z, x, y, z) =
+                Chunk::world_to_chunk_coords(pos[0], pos[1], pos[2]);
 
             let chunk = match chunks.get_mut(&(chunk_x, chunk_y, chunk_z)) {
                 Some(ChunkWaiter::Chunk(chunk)) => chunk,
@@ -261,31 +311,43 @@ impl Camera {
                         chunk.invalidate_mesh();
 
                         if x == 0 {
-                            if let Some(ChunkWaiter::Chunk(chunk)) = chunks.get_mut(&(chunk_x - 1, chunk_y, chunk_z)) {
+                            if let Some(ChunkWaiter::Chunk(chunk)) =
+                                chunks.get_mut(&(chunk_x - 1, chunk_y, chunk_z))
+                            {
                                 chunk.invalidate_mesh();
                             }
                         } else if x == CHUNK_SIZE - 1 {
-                            if let Some(ChunkWaiter::Chunk(chunk)) = chunks.get_mut(&(chunk_x + 1, chunk_y, chunk_z)) {
+                            if let Some(ChunkWaiter::Chunk(chunk)) =
+                                chunks.get_mut(&(chunk_x + 1, chunk_y, chunk_z))
+                            {
                                 chunk.invalidate_mesh();
                             }
                         }
 
                         if y == 0 {
-                            if let Some(ChunkWaiter::Chunk(chunk)) = chunks.get_mut(&(chunk_x, chunk_y - 1, chunk_z)) {
+                            if let Some(ChunkWaiter::Chunk(chunk)) =
+                                chunks.get_mut(&(chunk_x, chunk_y - 1, chunk_z))
+                            {
                                 chunk.invalidate_mesh();
                             }
                         } else if y == CHUNK_SIZE - 1 {
-                            if let Some(ChunkWaiter::Chunk(chunk)) = chunks.get_mut(&(chunk_x, chunk_y + 1, chunk_z)) {
+                            if let Some(ChunkWaiter::Chunk(chunk)) =
+                                chunks.get_mut(&(chunk_x, chunk_y + 1, chunk_z))
+                            {
                                 chunk.invalidate_mesh();
                             }
                         }
 
                         if z == 0 {
-                            if let Some(ChunkWaiter::Chunk(chunk)) = chunks.get_mut(&(chunk_x, chunk_y, chunk_z - 1)) {
+                            if let Some(ChunkWaiter::Chunk(chunk)) =
+                                chunks.get_mut(&(chunk_x, chunk_y, chunk_z - 1))
+                            {
                                 chunk.invalidate_mesh();
                             }
                         } else if z == CHUNK_SIZE - 1 {
-                            if let Some(ChunkWaiter::Chunk(chunk)) = chunks.get_mut(&(chunk_x, chunk_y, chunk_z + 1)) {
+                            if let Some(ChunkWaiter::Chunk(chunk)) =
+                                chunks.get_mut(&(chunk_x, chunk_y, chunk_z + 1))
+                            {
                                 chunk.invalidate_mesh();
                             }
                         }
@@ -308,7 +370,8 @@ impl Camera {
     }
 
     pub fn check_loaded_chunks(&self, chunks: &mut HashMap<(i32, i32, i32), ChunkWaiter>) {
-        let (chunk_x, chunk_y, chunk_z, ..) = Chunk::world_to_chunk_coords(self.position[0], self.position[1], self.position[2]);
+        let (chunk_x, chunk_y, chunk_z, ..) =
+            Chunk::world_to_chunk_coords(self.position[0], self.position[1], self.position[2]);
         if chunk_x != self.old_chunk_pos[0]
             || chunk_y != self.old_chunk_pos[1]
             || chunk_z != self.old_chunk_pos[2]
@@ -316,7 +379,11 @@ impl Camera {
             for i in -3..=3 {
                 for j in -3..=3 {
                     for k in -3..=3 {
-                        if let Some(ChunkWaiter::Chunk(chunk)) = chunks.get_mut(&(self.old_chunk_pos[0] + i, self.old_chunk_pos[1] + j, self.old_chunk_pos[2] + k)) {
+                        if let Some(ChunkWaiter::Chunk(chunk)) = chunks.get_mut(&(
+                            self.old_chunk_pos[0] + i,
+                            self.old_chunk_pos[1] + j,
+                            self.old_chunk_pos[2] + k,
+                        )) {
                             chunk.loaded = false;
                         }
                     }
