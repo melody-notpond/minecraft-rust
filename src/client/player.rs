@@ -1,6 +1,8 @@
 use glium::{Display, DrawParameters, Frame, IndexBuffer, Program, Surface, VertexBuffer, index::PrimitiveType};
 use tobj::LoadOptions;
 
+use crate::collision::Aabb;
+
 use super::shapes::{Normal, Position, TexCoord};
 
 pub struct Player {
@@ -50,6 +52,13 @@ impl Player {
             tex_coords: VertexBuffer::new(display, &tex_coords).unwrap(),
             normals: VertexBuffer::new(display, &normals).unwrap(),
             indices: IndexBuffer::new(display, PrimitiveType::TrianglesList, &model.0[0].mesh.indices).unwrap(),
+        }
+    }
+
+    pub fn aabb(&self) -> Aabb {
+        Aabb {
+            centre: [self.position[0], self.position[1] + 1.0, self.position[2]],
+            extents: [0.5, 1.0, 0.5],
         }
     }
 

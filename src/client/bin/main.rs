@@ -14,6 +14,7 @@ use glium::glutin::{
 use glium::{Display, Program, Surface, PolygonMode};
 use minecraft_rust::blocks::Block;
 use minecraft_rust::client::light::LightSource;
+use minecraft_rust::collision::DetectCollision;
 use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
 
@@ -22,8 +23,8 @@ use minecraft_rust::client::chunk::{Chunk, ChunkWaiter, Mesh};
 use minecraft_rust::packet::{ServerPacket, UserPacket};
 use minecraft_rust::client::player::Player;
 
-const USERNAME: &str = "uwu";
-const ADDRESS: &str = "0.0.0.0:6942";
+const USERNAME: &str = "first";
+const ADDRESS: &str = "0.0.0.0:6941";
 
 const CHUNKS_VERTEX_SHADER: &str = include_str!("../shaders/chunks-vertex.glsl");
 const CHUNKS_FRAGMENT_SHADER: &str = include_str!("../shaders/chunks-fragment.glsl");
@@ -250,6 +251,14 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
 
             //camera.check_loaded_chunks(&mut chunks);
         }
+
+        for (name, player) in players.iter() {
+            if camera.aabb().is_colliding(&player.aabb()) {
+                println!("im colliding with {}", name);
+            }
+        }
+
+        // RENDERING
 
         let mut target = display.draw();
         target.clear_color_and_depth((0.53, 0.80, 0.92, 1.0), 1.0);

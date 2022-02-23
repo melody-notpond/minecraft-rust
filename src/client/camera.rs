@@ -6,7 +6,7 @@ use glium::{
 };
 use nalgebra::Vector3;
 
-use crate::blocks::{Block, CHUNK_SIZE};
+use crate::{blocks::{Block, CHUNK_SIZE}, collision::Aabb};
 
 use super::{shapes::frustum::{Frustum, Plane}, chunk::{ChunkWaiter, Chunk}};
 
@@ -42,6 +42,13 @@ impl Camera {
 
     pub fn get_pos(&self) -> [f32; 3] {
         self.position
+    }
+
+    pub fn aabb(&self) -> Aabb {
+        Aabb {
+            centre: [self.position[0] + 0.5, self.position[1] + 1.0, self.position[2] + 0.5],
+            extents: [0.5, 1.0, 0.5],
+        }
     }
 
     pub fn is_moving(&self) -> bool {
