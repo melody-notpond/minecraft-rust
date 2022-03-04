@@ -149,12 +149,12 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
                         let window = gl_window.window();
                         let size = window.inner_size();
                         let centre = PhysicalPosition::new(size.width / 2, size.height / 2);
-                        camera.raycast(&display, &*chunks.read().unwrap(), RaycastAction::Unselect);
+                        camera.raycast(&display, &*chunks.read().unwrap(), RaycastAction::Unselect, &chunk_data_tx);
                         camera.turn_self(
                             position.x as i32 - centre.x as i32,
                             position.y as i32 - centre.y as i32,
                         );
-                        camera.raycast(&display, &*chunks.read().unwrap(), RaycastAction::Select);
+                        camera.raycast(&display, &*chunks.read().unwrap(), RaycastAction::Select, &chunk_data_tx);
                         window.set_cursor_position(centre).unwrap();
                     }
 
@@ -167,9 +167,10 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
                                     RaycastAction::Place(
                                         Block::get("solid").unwrap_or_else(Block::air),
                                     ),
+                                    &chunk_data_tx,
                                 ),
                                 MouseButton::Right => {
-                                    camera.raycast(&display, &*chunks.read().unwrap(), RaycastAction::Remove)
+                                    camera.raycast(&display, &*chunks.read().unwrap(), RaycastAction::Remove, &chunk_data_tx);
                                 }
 
                                 _ => (),
@@ -244,38 +245,32 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
                     to_send.push((x, y, z));
 
                     if let Some(chunk) = chunks.get(&(x - 1, y, z)) {
-                        if let ChunkWaiter::Chunk(chunk) = &mut *chunk.write().unwrap() {
-                            chunk.invalidate_mesh();
+                        if let ChunkWaiter::Chunk(_) = &mut *chunk.write().unwrap() {
                             to_send.push((x - 1, y, z));
                         }
                     }
                     if let Some(chunk) = chunks.get(&(x + 1, y, z)) {
-                        if let ChunkWaiter::Chunk(chunk) = &mut *chunk.write().unwrap() {
-                            chunk.invalidate_mesh();
+                        if let ChunkWaiter::Chunk(_) = &mut *chunk.write().unwrap() {
                             to_send.push((x + 1, y, z));
                         }
                     }
                     if let Some(chunk) = chunks.get(&(x, y - 1, z)) {
-                        if let ChunkWaiter::Chunk(chunk) = &mut *chunk.write().unwrap() {
-                            chunk.invalidate_mesh();
+                        if let ChunkWaiter::Chunk(_) = &mut *chunk.write().unwrap() {
                             to_send.push((x, y - 1, z));
                         }
                     }
                     if let Some(chunk) = chunks.get(&(x, y + 1, z)) {
-                        if let ChunkWaiter::Chunk(chunk) = &mut *chunk.write().unwrap() {
-                            chunk.invalidate_mesh();
+                        if let ChunkWaiter::Chunk(_) = &mut *chunk.write().unwrap() {
                             to_send.push((x, y + 1, z));
                         }
                     }
                     if let Some(chunk) = chunks.get(&(x, y, z - 1)) {
-                        if let ChunkWaiter::Chunk(chunk) = &mut *chunk.write().unwrap() {
-                            chunk.invalidate_mesh();
+                        if let ChunkWaiter::Chunk(_) = &mut *chunk.write().unwrap() {
                             to_send.push((x, y, z - 1));
                         }
                     }
                     if let Some(chunk) = chunks.get(&(x, y, z + 1)) {
-                        if let ChunkWaiter::Chunk(chunk) = &mut *chunk.write().unwrap() {
-                            chunk.invalidate_mesh();
+                        if let ChunkWaiter::Chunk(_) = &mut *chunk.write().unwrap() {
                             to_send.push((x, y, z + 1));
                         }
                     }
@@ -297,9 +292,9 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
             }
         }
 
-        camera.raycast(&display, &*chunks.read().unwrap(), RaycastAction::Unselect);
+        camera.raycast(&display, &*chunks.read().unwrap(), RaycastAction::Unselect, &chunk_data_tx);
         camera.tick(delta);
-        camera.raycast(&display, &*chunks.read().unwrap(), RaycastAction::Select);
+        camera.raycast(&display, &*chunks.read().unwrap(), RaycastAction::Select, &chunk_data_tx);
         if camera.is_moving() {
             let _ = tx.try_send(UserPacket::MoveSelf {
                 pos: camera.get_pos(),

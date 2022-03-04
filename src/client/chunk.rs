@@ -498,10 +498,6 @@ impl Chunk {
         }
     }
 
-    pub fn invalidate_mesh(&mut self) {
-        self.mesh_raw = None;
-    }
-
     pub fn aabb(&self) -> &Aabb {
         &self.aabb
     }

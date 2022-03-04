@@ -9,6 +9,7 @@ use glium::{
     Display, Frame, Surface,
 };
 use nalgebra::Vector3;
+use tokio::sync::mpsc;
 
 use crate::{
     blocks::{Block, CHUNK_SIZE},
@@ -281,6 +282,7 @@ impl Camera {
         display: &Display,
         chunks: &HashMap<(i32, i32, i32), RwLock<ChunkWaiter>>,
         action: RaycastAction,
+        tx: &mpsc::Sender<Vec<(i32, i32, i32)>>,
     ) {
         let mut pos = self.position;
 
@@ -309,22 +311,22 @@ impl Camera {
 
                         RaycastAction::Remove => {
                             *block = Block::air();
-                            chunk.invalidate_mesh();
 
+                            let mut to_send = vec![(chunk_x, chunk_y, chunk_z)];
                             if x == 0 {
                                 if let Some(chunk) =
                                     chunks.get(&(chunk_x - 1, chunk_y, chunk_z))
                                 {
-                                    if let ChunkWaiter::Chunk(chunk) = &mut *chunk.write().unwrap() {
-                                        chunk.invalidate_mesh();
+                                    if let ChunkWaiter::Chunk(_) = &mut *chunk.write().unwrap() {
+                                        to_send.push((chunk_x - 1, chunk_y, chunk_z));
                                     }
                                 }
                             } else if x == CHUNK_SIZE - 1 {
                                 if let Some(chunk) =
                                     chunks.get(&(chunk_x + 1, chunk_y, chunk_z))
                                 {
-                                    if let ChunkWaiter::Chunk(chunk) = &mut *chunk.write().unwrap() {
-                                        chunk.invalidate_mesh();
+                                    if let ChunkWaiter::Chunk(_) = &mut *chunk.write().unwrap() {
+                                        to_send.push((chunk_x + 1, chunk_y, chunk_z));
                                     }
                                 }
                             }
@@ -333,16 +335,16 @@ impl Camera {
                                 if let Some(chunk) =
                                     chunks.get(&(chunk_x, chunk_y - 1, chunk_z))
                                 {
-                                    if let ChunkWaiter::Chunk(chunk) = &mut *chunk.write().unwrap() {
-                                        chunk.invalidate_mesh();
+                                    if let ChunkWaiter::Chunk(_) = &mut *chunk.write().unwrap() {
+                                        to_send.push((chunk_x, chunk_y - 1, chunk_z));
                                     }
                                 }
                             } else if y == CHUNK_SIZE - 1 {
                                 if let Some(chunk) =
                                     chunks.get(&(chunk_x, chunk_y + 1, chunk_z))
                                 {
-                                    if let ChunkWaiter::Chunk(chunk) = &mut *chunk.write().unwrap() {
-                                        chunk.invalidate_mesh();
+                                    if let ChunkWaiter::Chunk(_) = &mut *chunk.write().unwrap() {
+                                        to_send.push((chunk_x, chunk_y + 1, chunk_z));
                                     }
                                 }
                             }
@@ -351,19 +353,21 @@ impl Camera {
                                 if let Some(chunk) =
                                     chunks.get(&(chunk_x, chunk_y, chunk_z - 1))
                                 {
-                                    if let ChunkWaiter::Chunk(chunk) = &mut *chunk.write().unwrap() {
-                                        chunk.invalidate_mesh();
+                                    if let ChunkWaiter::Chunk(_) = &mut *chunk.write().unwrap() {
+                                        to_send.push((chunk_x, chunk_y, chunk_z - 1));
                                     }
                                 }
                             } else if z == CHUNK_SIZE - 1 {
                                 if let Some(chunk) =
                                     chunks.get(&(chunk_x, chunk_y, chunk_z + 1))
                                 {
-                                    if let ChunkWaiter::Chunk(chunk) = &mut *chunk.write().unwrap() {
-                                        chunk.invalidate_mesh();
+                                    if let ChunkWaiter::Chunk(_) = &mut *chunk.write().unwrap() {
+                                        to_send.push((chunk_x, chunk_y, chunk_z + 1));
                                     }
                                 }
                             }
+
+                            tx.blocking_send(to_send).unwrap();
                         }
 
                         RaycastAction::Unselect => {
