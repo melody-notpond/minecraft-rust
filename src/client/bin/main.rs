@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime};
 
@@ -19,12 +19,12 @@ use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
 
 use minecraft_rust::client::camera::{Camera, RaycastAction};
-use minecraft_rust::client::chunk::{Chunk, ChunkWaiter, Mesh};
+use minecraft_rust::client::chunk::{Chunk, ChunkWaiter, Mesh, Light, InstanceData};
 use minecraft_rust::client::player::Player;
 use minecraft_rust::packet::{ServerPacket, UserPacket};
 
-const USERNAME: &str = "first";
-const ADDRESS: &str = "0.0.0.0:6941";
+const USERNAME: &str = "uwu";
+const ADDRESS: &str = "0.0.0.0:6942";
 
 const CHUNKS_VERTEX_SHADER: &str = include_str!("../shaders/chunks-vertex.glsl");
 const CHUNKS_FRAGMENT_SHADER: &str = include_str!("../shaders/chunks-fragment.glsl");
@@ -75,9 +75,9 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
     };
 
     let mut camera = Camera::new(10.0, 0.001, 90.0);
-    let mut chunks = HashMap::new();
-    let mut lights = vec![LightSource::new(15, 15, 15, camera.get_pos())];
+    let lights = Arc::new(RwLock::new(vec![LightSource::new(15, 15, 15, camera.get_pos())]));
     let mut players = HashMap::new();
+    let chunks = Arc::new(RwLock::new(HashMap::new()));
     let square = Mesh::square(&display);
     Block::register_defaults();
     let block_textures = Block::generate_atlas(&display);
@@ -85,10 +85,16 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
     for x in -2..=2 {
         for y in -2..=2 {
             for z in -2..=2 {
-                chunks.insert((x, y, z), ChunkWaiter::Timestamp(0));
+                chunks.write().unwrap().insert((x, y, z), RwLock::new(ChunkWaiter::Timestamp(0)));
             }
         }
     }
+
+    let (tx2, mut chunk_data_rx) = mpsc::channel(128);
+    let (chunk_data_tx, rx2) = mpsc::channel(128);
+    let chunks2 = chunks.clone();
+    let lights2 = lights.clone();
+    thread::spawn(|| mesh_loop(lights2, chunks2, tx2, rx2));
 
     let mut frame_count = 0;
     let mut last = Instant::now();
@@ -125,10 +131,7 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
                     }
 
                     WindowEvent::KeyboardInput { input, .. }
-                        if locked && camera.move_self(input) =>
-                    {
-                        ()
-                    }
+                        if locked && camera.move_self(input) => (),
 
                     WindowEvent::KeyboardInput { input, .. } if locked => {
                         if let Some(VirtualKeyCode::Semicolon) = input.virtual_keycode {
@@ -147,12 +150,12 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
                         let window = gl_window.window();
                         let size = window.inner_size();
                         let centre = PhysicalPosition::new(size.width / 2, size.height / 2);
-                        camera.raycast(&display, &mut chunks, RaycastAction::Unselect);
+                        camera.raycast(&display, &*chunks.read().unwrap(), RaycastAction::Unselect);
                         camera.turn_self(
                             position.x as i32 - centre.x as i32,
                             position.y as i32 - centre.y as i32,
                         );
-                        camera.raycast(&display, &mut chunks, RaycastAction::Select);
+                        camera.raycast(&display, &*chunks.read().unwrap(), RaycastAction::Select);
                         window.set_cursor_position(centre).unwrap();
                     }
 
@@ -161,13 +164,13 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
                             match button {
                                 MouseButton::Left => camera.raycast(
                                     &display,
-                                    &mut chunks,
+                                    &chunks.read().unwrap(),
                                     RaycastAction::Place(
                                         Block::get("solid").unwrap_or_else(Block::air),
                                     ),
                                 ),
                                 MouseButton::Right => {
-                                    camera.raycast(&display, &mut chunks, RaycastAction::Remove)
+                                    camera.raycast(&display, &*chunks.read().unwrap(), RaycastAction::Remove)
                                 }
 
                                 _ => (),
@@ -206,8 +209,8 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
         }
 
         let delta = Instant::now() - last;
-        let mut keys: Vec<(i32, i32, i32)> = Vec::new();
 
+        let mut to_send = vec![];
         while let Ok(packet) = rx.try_recv() {
             match packet {
                 ServerPacket::ConnectionAccepted => (),
@@ -234,45 +237,81 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
                         chunk.get_chunk_y(),
                         chunk.get_chunk_z(),
                     );
-                    chunks.insert(coords, ChunkWaiter::Chunk(Chunk::from_server_chunk(chunk)));
+                    let mut chunks = chunks.write().unwrap();
+                    chunks.insert(coords, RwLock::new(ChunkWaiter::Chunk(Chunk::from_server_chunk(chunk))));
                     let (x, y, z) = coords;
+                    to_send.push((x, y, z));
 
-                    if let Some(ChunkWaiter::Chunk(chunk)) = chunks.get_mut(&(x - 1, y, z)) {
-                        chunk.invalidate_mesh();
+                    if let Some(chunk) = chunks.get(&(x - 1, y, z)) {
+                        if let ChunkWaiter::Chunk(chunk) = &mut *chunk.write().unwrap() {
+                            chunk.invalidate_mesh();
+                            to_send.push((x - 1, y, z));
+                        }
                     }
-                    if let Some(ChunkWaiter::Chunk(chunk)) = chunks.get_mut(&(x + 1, y, z)) {
-                        chunk.invalidate_mesh();
+                    if let Some(chunk) = chunks.get(&(x + 1, y, z)) {
+                        if let ChunkWaiter::Chunk(chunk) = &mut *chunk.write().unwrap() {
+                            chunk.invalidate_mesh();
+                            to_send.push((x + 1, y, z));
+                        }
                     }
-                    if let Some(ChunkWaiter::Chunk(chunk)) = chunks.get_mut(&(x, y - 1, z)) {
-                        chunk.invalidate_mesh();
+                    if let Some(chunk) = chunks.get(&(x, y - 1, z)) {
+                        if let ChunkWaiter::Chunk(chunk) = &mut *chunk.write().unwrap() {
+                            chunk.invalidate_mesh();
+                            to_send.push((x, y - 1, z));
+                        }
                     }
-                    if let Some(ChunkWaiter::Chunk(chunk)) = chunks.get_mut(&(x, y + 1, z)) {
-                        chunk.invalidate_mesh();
+                    if let Some(chunk) = chunks.get(&(x, y + 1, z)) {
+                        if let ChunkWaiter::Chunk(chunk) = &mut *chunk.write().unwrap() {
+                            chunk.invalidate_mesh();
+                            to_send.push((x, y + 1, z));
+                        }
                     }
-                    if let Some(ChunkWaiter::Chunk(chunk)) = chunks.get_mut(&(x, y, z - 1)) {
-                        chunk.invalidate_mesh();
+                    if let Some(chunk) = chunks.get(&(x, y, z - 1)) {
+                        if let ChunkWaiter::Chunk(chunk) = &mut *chunk.write().unwrap() {
+                            chunk.invalidate_mesh();
+                            to_send.push((x, y, z - 1));
+                        }
                     }
-                    if let Some(ChunkWaiter::Chunk(chunk)) = chunks.get_mut(&(x, y, z + 1)) {
-                        chunk.invalidate_mesh();
+                    if let Some(chunk) = chunks.get(&(x, y, z + 1)) {
+                        if let ChunkWaiter::Chunk(chunk) = &mut *chunk.write().unwrap() {
+                            chunk.invalidate_mesh();
+                            to_send.push((x, y, z + 1));
+                        }
+                    }
+                }
+            }
+        }
+        if !to_send.is_empty() {
+            chunk_data_tx.blocking_send(to_send).unwrap();
+        }
+
+        while let Ok(v) = chunk_data_rx.try_recv() {
+            for (coords, instance_data, light_data) in v {
+                if let Some(chunk) = chunks.read().unwrap().get(&coords) {
+                    if let ChunkWaiter::Chunk(chunk) = &mut *chunk.write().unwrap() {
+                        chunk.set_mesh(&display, instance_data);
+                        chunk.set_lighting(&display, light_data);
+                        chunk.invalidate_selection();
                     }
                 }
             }
         }
 
-        camera.raycast(&display, &mut chunks, RaycastAction::Unselect);
+        camera.raycast(&display, &*chunks.read().unwrap(), RaycastAction::Unselect);
         camera.tick(delta);
-        camera.raycast(&display, &mut chunks, RaycastAction::Select);
+        camera.raycast(&display, &*chunks.read().unwrap(), RaycastAction::Select);
         if camera.is_moving() {
             let _ = tx.try_send(UserPacket::MoveSelf {
                 pos: camera.get_pos(),
             });
-            if let Some(light) = lights.get_mut(0) {
-                light.invalidate_chunk_lighting(&mut chunks);
-                light.set_location(camera.get_pos());
-                light.invalidate_chunk_lighting(&mut chunks);
+            if let Some(light) = lights.write().unwrap().get_mut(0) {
+                //let mut v = light.invalidate_chunk_lighting(&*chunks.read().unwrap());
+                //light.set_location(camera.get_pos());
+                //v.extend(light.invalidate_chunk_lighting(&*chunks.read().unwrap()));
+                //chunk_data_tx.blocking_send(v).unwrap();
             }
 
-            //camera.check_loaded_chunks(&mut chunks);
+            //camera.check_loaded_chunks(&mut *chunks.write().unwrap());
         }
 
         for (name, player) in players.iter() {
@@ -290,20 +329,10 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
         let view = camera.view_matrix();
         let frustum = camera.frustum(&target);
 
-        let mut changed = 0;
-        keys.extend(chunks.keys());
-        for key in keys.iter() {
-            let mut chunk = chunks.remove(key).unwrap();
-            if let ChunkWaiter::Chunk(chunk) = &mut chunk {
+        for (_, chunk) in chunks.read().unwrap().iter() {
+            if let ChunkWaiter::Chunk(chunk) = &mut *chunk.write().unwrap() {
                 if chunk.loaded {
-                    if changed < 50 && chunk.generate_mesh(&display, &chunks) {
-                        changed += 1;
-                        chunk.invalidate_lights();
-                        chunk.invalidate_selection();
-                        chunk.select(&display, None);
-                    }
-
-                    chunk.populate_lights(&display, &lights);
+                    chunk.select(&display, None);
 
                     if chunk.aabb().is_in_frustum(&frustum) {
                         chunk.render(
@@ -318,16 +347,14 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
                     }
                 }
             }
-            chunks.insert(*key, chunk);
         }
-
-        keys.clear();
 
         let timestamp = SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        for ((x, y, z), chunk) in chunks.iter_mut() {
+        for ((x, y, z), chunk) in chunks.write().unwrap().iter_mut() {
+            let mut chunk = chunk.write().unwrap();
             if let Some(stamp) = chunk.timestamp() {
                 if timestamp - stamp > 100_000 {
                     *chunk = ChunkWaiter::Timestamp(timestamp);
@@ -350,6 +377,25 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
         let next_frame_time = last + Duration::from_nanos(16_666_667);
         *control_flow = ControlFlow::WaitUntil(next_frame_time);
     });
+}
+
+#[allow(clippy::type_complexity)]
+fn mesh_loop(lights: Arc<RwLock<Vec<LightSource>>>, chunks: Arc<RwLock<HashMap<(i32, i32, i32), RwLock<ChunkWaiter>>>>, tx: mpsc::Sender<Vec<((i32, i32, i32), Vec<InstanceData>, Vec<Light>)>>, mut rx: mpsc::Receiver<Vec<(i32, i32, i32)>>) {
+    while let Some(v) = rx.blocking_recv() {
+        let mut result = vec![];
+        for coords in v {
+            if let Some(chunk) = chunks.read().unwrap().get(&coords) {
+                let chunk = chunk.read().unwrap();
+                if let ChunkWaiter::Chunk(chunk) = &*chunk {
+                    let mesh = chunk.generate_mesh(&*chunks.read().unwrap());
+                    let lights = chunk.populate_lights(&*lights.read().unwrap(), &mesh);
+                    result.push((coords, mesh, lights));
+                }
+            }
+        }
+
+        tx.blocking_send(result).unwrap();
+    }
 }
 
 #[tokio::main]

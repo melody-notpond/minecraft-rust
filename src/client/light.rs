@@ -1,4 +1,6 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::RwLock};
+
+use tokio::sync::mpsc;
 
 use crate::blocks::{FaceDirection, CHUNK_SIZE};
 
@@ -23,9 +25,10 @@ impl LightSource {
         }
     }
 
-    pub fn invalidate_chunk_lighting(&self, chunks: &mut HashMap<(i32, i32, i32), ChunkWaiter>) {
+    pub fn invalidate_chunk_lighting(&self, chunks: &HashMap<(i32, i32, i32), RwLock<ChunkWaiter>>) -> Vec<(i32, i32, i32)> {
         let (x, y, z, ..) =
             Chunk::world_to_chunk_coords(self.location[0], self.location[1], self.location[2]);
+        let mut to_send = vec![];
         for i in -2..=2 {
             for j in -2..=2 {
                 for k in -2..=2 {
@@ -43,15 +46,22 @@ impl LightSource {
                         && ((z - self.location[2]).abs() < 15.0
                             || (z + CHUNK_SIZE as f32 / 2.0 - self.location[2]).abs() < 15.0)
                     {
-                        if let Some(ChunkWaiter::Chunk(chunk)) =
-                            chunks.get_mut(&(chunk_x, chunk_y, chunk_z))
+                        if let Some(chunk) =
+                            chunks.get(&(chunk_x, chunk_y, chunk_z))
                         {
-                            chunk.invalidate_lights();
+                            println!("uwu");
+                            if let ChunkWaiter::Chunk(chunk) = &mut *chunk.write().unwrap() {
+                                chunk.invalidate_lights();
+                                to_send.push((chunk_x, chunk_y, chunk_z));
+                            }
+                            println!("owo");
                         }
                     }
                 }
             }
         }
+
+        to_send
     }
 
     pub fn calculate_light_intensity(

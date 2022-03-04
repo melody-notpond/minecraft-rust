@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::RwLock;
 
 use glium::index::PrimitiveType;
 use glium::texture::SrgbTexture3d;
@@ -82,7 +83,7 @@ pub struct BlockTextures {
 }
 
 #[derive(Debug, Copy, Clone)]
-struct InstanceData {
+pub struct InstanceData {
     /// 0..2   = FaceDirection
     /// 3..3   = nothing
     /// 4..7   = x
@@ -149,7 +150,7 @@ impl InstanceData {
 }
 
 #[derive(Copy, Clone, Debug)]
-struct Light {
+pub struct Light {
     light: u32,
 }
 
@@ -183,6 +184,9 @@ pub struct Chunk {
     aabb: Aabb,
     pub loaded: bool,
 }
+
+unsafe impl Send for Chunk {}
+unsafe impl Sync for Chunk {}
 
 impl Chunk {
     pub fn from_server_chunk(chunk: ServerChunk) -> Chunk {
@@ -273,7 +277,7 @@ impl Chunk {
 
     fn get_block<'a>(
         &'a self,
-        chunks: &'a HashMap<(i32, i32, i32), ChunkWaiter>,
+        chunks: &'a HashMap<(i32, i32, i32), RwLock<ChunkWaiter>>,
         x: isize,
         y: isize,
         z: isize,
@@ -281,38 +285,56 @@ impl Chunk {
         if x < 0 {
             chunks
                 .get(&(self.chunk_x - 1, self.chunk_y, self.chunk_z))
-                .and_then(ChunkWaiter::chunk)
-                .map(|v| v.blocks[CHUNK_SIZE - 1][y as usize][z as usize])
+                .and_then(|v| v.read().ok())
+                .and_then(|v| match &*v {
+                    ChunkWaiter::Chunk(v) => Some(v.blocks[CHUNK_SIZE - 1][y as usize][z as usize]),
+                    ChunkWaiter::Timestamp(_) => None,
+                })
                 .unwrap_or_else(Block::air)
         } else if x > CHUNK_SIZE as isize - 1 {
             chunks
                 .get(&(self.chunk_x + 1, self.chunk_y, self.chunk_z))
-                .and_then(ChunkWaiter::chunk)
-                .map(|v| v.blocks[0][y as usize][z as usize])
+                .and_then(|v| v.read().ok())
+                .and_then(|v| match &*v {
+                    ChunkWaiter::Chunk(v) => Some(v.blocks[0][y as usize][z as usize]),
+                    ChunkWaiter::Timestamp(_) => None,
+                })
                 .unwrap_or_else(Block::air)
         } else if y < 0 {
             chunks
                 .get(&(self.chunk_x, self.chunk_y - 1, self.chunk_z))
-                .and_then(ChunkWaiter::chunk)
-                .map(|v| v.blocks[x as usize][CHUNK_SIZE - 1][z as usize])
+                .and_then(|v| v.read().ok())
+                .and_then(|v| match &*v {
+                    ChunkWaiter::Chunk(v) => Some(v.blocks[x as usize][CHUNK_SIZE - 1][z as usize]),
+                    ChunkWaiter::Timestamp(_) => None,
+                })
                 .unwrap_or_else(Block::air)
         } else if y > CHUNK_SIZE as isize - 1 {
             chunks
                 .get(&(self.chunk_x, self.chunk_y + 1, self.chunk_z))
-                .and_then(ChunkWaiter::chunk)
-                .map(|v| v.blocks[x as usize][0][z as usize])
+                .and_then(|v| v.read().ok())
+                .and_then(|v| match &*v {
+                    ChunkWaiter::Chunk(v) => Some(v.blocks[x as usize][0][z as usize]),
+                    ChunkWaiter::Timestamp(_) => None,
+                })
                 .unwrap_or_else(Block::air)
         } else if z < 0 {
             chunks
                 .get(&(self.chunk_x, self.chunk_y, self.chunk_z - 1))
-                .and_then(ChunkWaiter::chunk)
-                .map(|v| v.blocks[x as usize][y as usize][CHUNK_SIZE - 1])
+                .and_then(|v| v.read().ok())
+                .and_then(|v| match &*v {
+                    ChunkWaiter::Chunk(v) => Some(v.blocks[x as usize][y as usize][CHUNK_SIZE - 1]),
+                    ChunkWaiter::Timestamp(_) => None,
+                })
                 .unwrap_or_else(Block::air)
         } else if z > CHUNK_SIZE as isize - 1 {
             chunks
                 .get(&(self.chunk_x, self.chunk_y, self.chunk_z + 1))
-                .and_then(ChunkWaiter::chunk)
-                .map(|v| v.blocks[x as usize][y as usize][0])
+                .and_then(|v| v.read().ok())
+                .and_then(|v| match &*v {
+                    ChunkWaiter::Chunk(v) => Some(v.blocks[x as usize][y as usize][0]),
+                    ChunkWaiter::Timestamp(_) => None,
+                })
                 .unwrap_or_else(Block::air)
         } else {
             self.blocks[x as usize][y as usize][z as usize]
@@ -320,14 +342,9 @@ impl Chunk {
     }
 
     pub fn generate_mesh(
-        &mut self,
-        display: &Display,
-        chunks: &HashMap<(i32, i32, i32), ChunkWaiter>,
-    ) -> bool {
-        if self.mesh_raw.is_some() {
-            return false;
-        }
-
+        &self,
+        chunks: &HashMap<(i32, i32, i32), RwLock<ChunkWaiter>>,
+    ) -> Vec<InstanceData> {
         let mut instance_data = vec![];
 
         for x in 0..CHUNK_SIZE {
@@ -402,51 +419,41 @@ impl Chunk {
             }
         }
 
-        self.mesh = Some(Box::new(
-            VertexBuffer::new(display, &instance_data).unwrap(),
-        ));
-        self.mesh_raw = Some(instance_data);
-        true
+        instance_data
     }
 
-    pub fn populate_lights(&mut self, display: &Display, lights: &[LightSource]) {
-        if self.lights.is_some() {
-            return;
-        }
+    pub fn populate_lights(&self, lights: &[LightSource], mesh: &[InstanceData]) -> Vec<Light> {
+        let mut light_data = vec![];
 
-        if let Some(mesh) = &self.mesh_raw {
-            let mut light_data = vec![];
+        for data in mesh {
+            let x = data.x() as i32;
+            let y = data.y() as i32;
+            let z = data.z() as i32;
+            let dir = data.direction();
 
-            for data in mesh {
-                let x = data.x() as i32;
-                let y = data.y() as i32;
-                let z = data.z() as i32;
-                let dir = data.direction();
+            let mut red = 0;
+            let mut green = 0;
+            let mut blue = 0;
 
-                let mut red = 0;
-                let mut green = 0;
-                let mut blue = 0;
-
-                for light in lights {
-                    let (dred, dgreen, dblue) = light.calculate_light_intensity(
-                        self.chunk_x * CHUNK_SIZE as i32 + x,
-                        self.chunk_y * CHUNK_SIZE as i32 + y,
-                        self.chunk_z * CHUNK_SIZE as i32 + z,
-                        dir,
-                    );
-                    red += dred;
-                    green += dgreen;
-                    blue += dblue;
-                }
-
-                red = red.min(15);
-                green = green.min(15);
-                blue = blue.min(15);
-                light_data.push(Light::new(red as u32, green as u32, blue as u32));
+            for light in lights {
+                let (dred, dgreen, dblue) = light.calculate_light_intensity(
+                    self.chunk_x * CHUNK_SIZE as i32 + x,
+                    self.chunk_y * CHUNK_SIZE as i32 + y,
+                    self.chunk_z * CHUNK_SIZE as i32 + z,
+                    dir,
+                );
+                red += dred;
+                green += dgreen;
+                blue += dblue;
             }
 
-            self.lights = Some(Box::new(VertexBuffer::new(display, &light_data).unwrap()));
+            red = red.min(15);
+            green = green.min(15);
+            blue = blue.min(15);
+            light_data.push(Light::new(red as u32, green as u32, blue as u32));
         }
+
+        light_data
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -514,6 +521,15 @@ impl Chunk {
 
     pub fn aabb(&self) -> &Aabb {
         &self.aabb
+    }
+
+    pub fn set_mesh(&mut self, display: &Display, mesh_raw: Vec<InstanceData>) {
+        self.mesh = Some(Box::new(VertexBuffer::new(display, &mesh_raw).unwrap()));
+        self.mesh_raw = Some(mesh_raw);
+    }
+
+    pub fn set_lighting(&mut self, display: &Display, lighting: Vec<Light>) {
+        self.lights = Some(Box::new(VertexBuffer::new(display, &lighting).unwrap()));
     }
 
     pub fn select(&mut self, display: &Display, coords: Option<(usize, usize, usize)>) {
