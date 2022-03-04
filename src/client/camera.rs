@@ -383,7 +383,7 @@ impl Camera {
         }
     }
 
-    pub fn check_loaded_chunks(&self, chunks: &mut HashMap<(i32, i32, i32), RwLock<ChunkWaiter>>) {
+    pub fn check_loaded_chunks(&mut self, chunks: &mut HashMap<(i32, i32, i32), RwLock<ChunkWaiter>>) {
         let (chunk_x, chunk_y, chunk_z, ..) =
             Chunk::world_to_chunk_coords(self.position[0], self.position[1], self.position[2]);
         if chunk_x != self.old_chunk_pos[0]

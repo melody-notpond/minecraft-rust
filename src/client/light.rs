@@ -1,11 +1,3 @@
-use std::{collections::HashMap, sync::RwLock};
-
-use tokio::sync::mpsc;
-
-use crate::blocks::{FaceDirection, CHUNK_SIZE};
-
-use super::chunk::{Chunk, ChunkWaiter};
-
 pub struct LightSource {
     red: u8,
     green: u8,

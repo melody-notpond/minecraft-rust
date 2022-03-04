@@ -152,6 +152,7 @@ impl InstanceData {
     }
 }
 
+#[derive(Debug, Copy, Clone)]
 struct Selection {
     selected: u32,
 }

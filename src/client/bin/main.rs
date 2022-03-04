@@ -19,7 +19,7 @@ use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
 
 use minecraft_rust::client::camera::{Camera, RaycastAction};
-use minecraft_rust::client::chunk::{Chunk, ChunkWaiter, Mesh, Light, InstanceData};
+use minecraft_rust::client::chunk::{Chunk, ChunkWaiter, Mesh, InstanceData};
 use minecraft_rust::client::player::Player;
 use minecraft_rust::packet::{ServerPacket, UserPacket};
 
@@ -85,7 +85,7 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
     for x in -3..=3 {
         for y in -1..=1 {
             for z in -3..=3 {
-                chunks.insert((x, y, z), ChunkWaiter::Timestamp(0));
+                chunks.write().unwrap().insert((x, y, z), RwLock::new(ChunkWaiter::Timestamp(0)));
             }
         }
     }
@@ -93,8 +93,7 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
     let (tx2, mut chunk_data_rx) = mpsc::channel(128);
     let (chunk_data_tx, rx2) = mpsc::channel(128);
     let chunks2 = chunks.clone();
-    let lights2 = lights.clone();
-    thread::spawn(|| mesh_loop(lights2, chunks2, tx2, rx2));
+    thread::spawn(|| mesh_loop(chunks2, tx2, rx2));
 
     let mut frame_count = 0;
     let mut last = Instant::now();
@@ -210,7 +209,6 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
 
         let delta = Instant::now() - last;
         last = Instant::now();
-        let mut keys: Vec<(i32, i32, i32)> = Vec::new();
 
         let mut to_send = vec![];
         while let Ok(packet) = rx.try_recv() {
@@ -241,7 +239,7 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
                     );
                   
                     let mut chunks = chunks.write().unwrap();
-                    chunks.insert(coords, RwLock::new(ChunkWaiter::Chunk(Chunk::from_server_chunk(chunk))));
+                    chunks.insert(coords, RwLock::new(ChunkWaiter::Chunk(Chunk::from_server_chunk(&display, chunk))));
                     let (x, y, z) = coords;
                     to_send.push((x, y, z));
 
@@ -289,11 +287,10 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
         }
 
         while let Ok(v) = chunk_data_rx.try_recv() {
-            for (coords, instance_data, light_data) in v {
+            for (coords, instance_data) in v {
                 if let Some(chunk) = chunks.read().unwrap().get(&coords) {
                     if let ChunkWaiter::Chunk(chunk) = &mut *chunk.write().unwrap() {
                         chunk.set_mesh(&display, instance_data);
-                        chunk.set_lighting(&display, light_data);
                         chunk.invalidate_selection();
                     }
                 }
@@ -307,7 +304,7 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
             let _ = tx.try_send(UserPacket::MoveSelf {
                 pos: camera.get_pos(),
             });
-            if let Some(light) = lights.get_mut(0) {
+            if let Some(light) = lights.write().unwrap().get_mut(0) {
                 light.set_location(camera.get_pos());
             }
 
@@ -343,7 +340,7 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
                             &params,
                             &square,
                             &block_textures,
-                            &lights,
+                            &lights.read().unwrap(),
                         );
                     }
                 }
@@ -354,7 +351,7 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        for ((x, y, z), chunk) in chunks.write().unwrap().iter_mut() {
+        for ((x, y, z), chunk) in chunks.read().unwrap().iter() {
             let mut chunk = chunk.write().unwrap();
             if let Some(stamp) = chunk.timestamp() {
                 if timestamp - stamp > 100_000 {
@@ -380,7 +377,7 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
 }
 
 #[allow(clippy::type_complexity)]
-fn mesh_loop(lights: Arc<RwLock<Vec<LightSource>>>, chunks: Arc<RwLock<HashMap<(i32, i32, i32), RwLock<ChunkWaiter>>>>, tx: mpsc::Sender<Vec<((i32, i32, i32), Vec<InstanceData>, Vec<Light>)>>, mut rx: mpsc::Receiver<Vec<(i32, i32, i32)>>) {
+fn mesh_loop(chunks: Arc<RwLock<HashMap<(i32, i32, i32), RwLock<ChunkWaiter>>>>, tx: mpsc::Sender<Vec<((i32, i32, i32), Vec<InstanceData>)>>, mut rx: mpsc::Receiver<Vec<(i32, i32, i32)>>) {
     while let Some(v) = rx.blocking_recv() {
         let mut result = vec![];
         for coords in v {
@@ -388,8 +385,7 @@ fn mesh_loop(lights: Arc<RwLock<Vec<LightSource>>>, chunks: Arc<RwLock<HashMap<(
                 let chunk = chunk.read().unwrap();
                 if let ChunkWaiter::Chunk(chunk) = &*chunk {
                     let mesh = chunk.generate_mesh(&*chunks.read().unwrap());
-                    let lights = chunk.populate_lights(&*lights.read().unwrap(), &mesh);
-                    result.push((coords, mesh, lights));
+                    result.push((coords, mesh));
                 }
             }
         }
