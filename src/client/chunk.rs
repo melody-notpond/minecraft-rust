@@ -178,7 +178,7 @@ pub struct Chunk {
     mesh: Option<Box<VertexBuffer<InstanceData>>>,
     selected: Option<Box<VertexBuffer<Selection>>>,
     aabb: Aabb,
-    light_buffer: UniformBuffer<[Light; LIGHT_COUNT]>,
+    light_buffer: Box<UniformBuffer<[Light; LIGHT_COUNT]>>,
     pub loaded: bool,
 }
 
@@ -200,11 +200,11 @@ impl Chunk {
                 ],
                 extents: [CHUNK_SIZE as f32 * 0.25; 3],
             },
-            light_buffer: UniformBuffer::new(display, [Light {
+            light_buffer: Box::new(UniformBuffer::new(display, [Light {
                     colour: 0,
                     reserved: [0; 3],
-                    position: [0.0; 3],
-                }; 5]).unwrap(),
+                    position: [f32::INFINITY; 3],
+                }; 5]).unwrap()),
             loaded: true,
         }
     }
@@ -424,6 +424,10 @@ impl Chunk {
         lights: &[LightSource],
     ) {
         if let Some(data) = &self.mesh {
+            if data.len() == 0 {
+                return;
+            }
+
             if let Some(selected) = &self.selected {
                 let model = [
                     [1.0, 0.0, 0.0, 0.0],
@@ -440,7 +444,7 @@ impl Chunk {
                 let mut new = [Light {
                     colour: 0,
                     reserved: [0; 3],
-                    position: [0.0; 3],
+                    position: [f32::INFINITY; 3],
                 }; LIGHT_COUNT];
 
                 for (new, light) in new.iter_mut().zip(lights) {
@@ -456,7 +460,8 @@ impl Chunk {
                     model: model,
                     view: view,
                     perspective: perspective,
-                    Lights: &self.light_buffer,
+                    Lights: &*self.light_buffer,
+                    light_count: lights.len().min(LIGHT_COUNT) as u32,
                     textures: Sampler::new(&textures.textures).minify_filter(MinifySamplerFilter::Nearest).magnify_filter(MagnifySamplerFilter::Nearest),
                     texture_count: textures.texture_count,
                 };

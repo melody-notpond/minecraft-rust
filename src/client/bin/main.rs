@@ -82,9 +82,9 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
     Block::register_defaults();
     let block_textures = Block::generate_atlas(&display);
 
-    for x in -2..=2 {
-        for y in -2..=2 {
-            for z in -2..=2 {
+    for x in -3..=3 {
+        for y in -1..=1 {
+            for z in -3..=3 {
                 chunks.insert((x, y, z), ChunkWaiter::Timestamp(0));
             }
         }
