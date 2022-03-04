@@ -82,10 +82,10 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
     Block::register_defaults();
     let block_textures = Block::generate_atlas(&display);
 
-    for x in -2..=2 {
-        for y in -2..=2 {
-            for z in -2..=2 {
-                chunks.write().unwrap().insert((x, y, z), RwLock::new(ChunkWaiter::Timestamp(0)));
+    for x in -3..=3 {
+        for y in -1..=1 {
+            for z in -3..=3 {
+                chunks.insert((x, y, z), ChunkWaiter::Timestamp(0));
             }
         }
     }
@@ -188,7 +188,7 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
                 StartCause::Init => {
                     last = Instant::now();
                     last_frame = last;
-                    let next_frame_time = last + Duration::from_nanos(16_666_667);
+                    let next_frame_time = last + Duration::from_nanos(5);
                     *control_flow = ControlFlow::WaitUntil(next_frame_time);
                     return;
                 }
@@ -209,6 +209,8 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
         }
 
         let delta = Instant::now() - last;
+        last = Instant::now();
+        let mut keys: Vec<(i32, i32, i32)> = Vec::new();
 
         let mut to_send = vec![];
         while let Ok(packet) = rx.try_recv() {
@@ -237,6 +239,7 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
                         chunk.get_chunk_y(),
                         chunk.get_chunk_z(),
                     );
+                  
                     let mut chunks = chunks.write().unwrap();
                     chunks.insert(coords, RwLock::new(ChunkWaiter::Chunk(Chunk::from_server_chunk(chunk))));
                     let (x, y, z) = coords;
@@ -304,11 +307,8 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
             let _ = tx.try_send(UserPacket::MoveSelf {
                 pos: camera.get_pos(),
             });
-            if let Some(light) = lights.write().unwrap().get_mut(0) {
-                //let mut v = light.invalidate_chunk_lighting(&*chunks.read().unwrap());
-                //light.set_location(camera.get_pos());
-                //v.extend(light.invalidate_chunk_lighting(&*chunks.read().unwrap()));
-                //chunk_data_tx.blocking_send(v).unwrap();
+            if let Some(light) = lights.get_mut(0) {
+                light.set_location(camera.get_pos());
             }
 
             //camera.check_loaded_chunks(&mut *chunks.write().unwrap());
@@ -343,6 +343,7 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
                             &params,
                             &square,
                             &block_textures,
+                            &lights,
                         );
                     }
                 }
@@ -373,8 +374,7 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
 
         target.finish().unwrap();
 
-        last = Instant::now();
-        let next_frame_time = last + Duration::from_nanos(16_666_667);
+        let next_frame_time = Instant::now() + Duration::from_nanos(5);
         *control_flow = ControlFlow::WaitUntil(next_frame_time);
     });
 }

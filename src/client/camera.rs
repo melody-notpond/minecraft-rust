@@ -423,6 +423,8 @@ impl Camera {
                     }
                 }
             }
+
+            self.old_chunk_pos = [chunk_x, chunk_y, chunk_z];
         }
     }
 }

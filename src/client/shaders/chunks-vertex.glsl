@@ -1,16 +1,25 @@
 #version 150
+#define LIGHT_COUNT 5u
 
 in vec3 position;
 in vec2 tex_coords;
 in vec3 normal;
 in uvec2 data;
-in uint light;
 in uint selected;
+
+struct Light {
+    uint colour;
+    vec3 position;
+};
 
 uniform mat4 model;
 uniform mat4 view;
 uniform mat4 perspective;
 uniform uint texture_count;
+uniform Lights {
+    Light lights[LIGHT_COUNT];
+};
+uniform uint light_count;
 
 out vec3 tex_coords_out;
 out vec3 normal_out;
@@ -120,11 +129,18 @@ void main() {
             break;
     }
 
-    vec3 light_colour = vec3(float((light & 0xf000u) >> 12) / 15.0, float((light & 0x0f00u) >> 8) / 15.0, float((light & 0x00f0u) >> 4) / 15.0);
+    vec3 light_colour = vec3(0.0);
+    for (uint i = 0u; i < light_count; i++) {
+        if (lights[i].colour != 0u) {
+            float dist = distance(lights[i].position, new_model[3].xyz);
+            vec3 colour = vec3(float((lights[i].colour & 0xf000u) >> 12) / 15.0, float((lights[i].colour & 0x0f00u) >> 8) / 15.0, float((lights[i].colour & 0x00f0u) >> 4) / 15.0);
+            light_colour += max(colour - vec3(dist / 7.5), vec3(0.0));
+        }
+    }
     const float min_light = 0.05;
     light_colour *= vec3(1.0 - min_light);
     light_colour += vec3(min_light);
-    light_out = vec4(light_colour, 1.0);
+    light_out = vec4(min(light_colour, vec3(1.0)), 1.0);
     if (selected != 0u) {
         light_out *= vec4(vec3(1.5), 1.0);
     }
