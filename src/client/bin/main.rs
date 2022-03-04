@@ -125,10 +125,7 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
                     }
 
                     WindowEvent::KeyboardInput { input, .. }
-                        if locked && camera.move_self(input) =>
-                    {
-                        ()
-                    }
+                        if locked && camera.move_self(input) => (),
 
                     WindowEvent::KeyboardInput { input, .. } if locked => {
                         if let Some(VirtualKeyCode::Semicolon) = input.virtual_keycode {
@@ -185,7 +182,7 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
                 StartCause::Init => {
                     last = Instant::now();
                     last_frame = last;
-                    let next_frame_time = last + Duration::from_nanos(16_666_667);
+                    let next_frame_time = last + Duration::from_nanos(5);
                     *control_flow = ControlFlow::WaitUntil(next_frame_time);
                     return;
                 }
@@ -206,6 +203,7 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
         }
 
         let delta = Instant::now() - last;
+        last = Instant::now();
         let mut keys: Vec<(i32, i32, i32)> = Vec::new();
 
         while let Ok(packet) = rx.try_recv() {
@@ -234,7 +232,7 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
                         chunk.get_chunk_y(),
                         chunk.get_chunk_z(),
                     );
-                    chunks.insert(coords, ChunkWaiter::Chunk(Chunk::from_server_chunk(chunk)));
+                    chunks.insert(coords, ChunkWaiter::Chunk(Chunk::from_server_chunk(&display, chunk)));
                     let (x, y, z) = coords;
 
                     if let Some(ChunkWaiter::Chunk(chunk)) = chunks.get_mut(&(x - 1, y, z)) {
@@ -267,9 +265,7 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
                 pos: camera.get_pos(),
             });
             if let Some(light) = lights.get_mut(0) {
-                light.invalidate_chunk_lighting(&mut chunks);
                 light.set_location(camera.get_pos());
-                light.invalidate_chunk_lighting(&mut chunks);
             }
 
             //camera.check_loaded_chunks(&mut chunks);
@@ -298,12 +294,9 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
                 if chunk.loaded {
                     if changed < 50 && chunk.generate_mesh(&display, &chunks) {
                         changed += 1;
-                        chunk.invalidate_lights();
                         chunk.invalidate_selection();
                         chunk.select(&display, None);
                     }
-
-                    chunk.populate_lights(&display, &lights);
 
                     if chunk.aabb().is_in_frustum(&frustum) {
                         chunk.render(
@@ -314,6 +307,7 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
                             &params,
                             &square,
                             &block_textures,
+                            &lights,
                         );
                     }
                 }
@@ -346,8 +340,7 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
 
         target.finish().unwrap();
 
-        last = Instant::now();
-        let next_frame_time = last + Duration::from_nanos(16_666_667);
+        let next_frame_time = Instant::now() + Duration::from_nanos(5);
         *control_flow = ControlFlow::WaitUntil(next_frame_time);
     });
 }
