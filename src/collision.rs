@@ -1,6 +1,6 @@
 use crate::blocks::Block;
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct Aabb {
     pub centre: [f32; 3],
     pub extents: [f32; 3],

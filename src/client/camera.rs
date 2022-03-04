@@ -1,7 +1,7 @@
 use std::{
     collections::{hash_map::Entry, HashMap},
     convert::TryInto,
-    time::Duration,
+    time::Duration, sync::RwLock,
 };
 
 use glium::{
@@ -9,6 +9,7 @@ use glium::{
     Display, Frame, Surface,
 };
 use nalgebra::Vector3;
+use tokio::sync::mpsc;
 
 use crate::{
     blocks::{Block, CHUNK_SIZE},
@@ -279,8 +280,9 @@ impl Camera {
     pub fn raycast(
         &self,
         display: &Display,
-        chunks: &mut HashMap<(i32, i32, i32), ChunkWaiter>,
+        chunks: &HashMap<(i32, i32, i32), RwLock<ChunkWaiter>>,
         action: RaycastAction,
+        tx: &mpsc::Sender<Vec<(i32, i32, i32)>>,
     ) {
         let mut pos = self.position;
 
@@ -293,83 +295,99 @@ impl Camera {
             let (chunk_x, chunk_y, chunk_z, x, y, z) =
                 Chunk::world_to_chunk_coords(pos[0], pos[1], pos[2]);
 
-            let chunk = match chunks.get_mut(&(chunk_x, chunk_y, chunk_z)) {
-                Some(ChunkWaiter::Chunk(chunk)) => chunk,
+            let chunk = match chunks.get(&(chunk_x, chunk_y, chunk_z)) {
+                Some(chunk) => chunk,
                 _ => continue,
             };
 
-            let block = chunk.block_mut(x, y, z);
+            if let ChunkWaiter::Chunk(chunk) = &mut *chunk.write().unwrap() {
+                let block = chunk.block_mut(x, y, z);
 
-            if block.is_solid().unwrap_or(false) {
-                match action {
-                    RaycastAction::Place(_block) => {
-                        // TODO
-                    }
-
-                    RaycastAction::Remove => {
-                        *block = Block::air();
-                        chunk.invalidate_mesh();
-
-                        if x == 0 {
-                            if let Some(ChunkWaiter::Chunk(chunk)) =
-                                chunks.get_mut(&(chunk_x - 1, chunk_y, chunk_z))
-                            {
-                                chunk.invalidate_mesh();
-                            }
-                        } else if x == CHUNK_SIZE - 1 {
-                            if let Some(ChunkWaiter::Chunk(chunk)) =
-                                chunks.get_mut(&(chunk_x + 1, chunk_y, chunk_z))
-                            {
-                                chunk.invalidate_mesh();
-                            }
+                if block.is_solid().unwrap_or(false) {
+                    match action {
+                        RaycastAction::Place(_block) => {
+                            // TODO
                         }
 
-                        if y == 0 {
-                            if let Some(ChunkWaiter::Chunk(chunk)) =
-                                chunks.get_mut(&(chunk_x, chunk_y - 1, chunk_z))
-                            {
-                                chunk.invalidate_mesh();
+                        RaycastAction::Remove => {
+                            *block = Block::air();
+
+                            let mut to_send = vec![(chunk_x, chunk_y, chunk_z)];
+                            if x == 0 {
+                                if let Some(chunk) =
+                                    chunks.get(&(chunk_x - 1, chunk_y, chunk_z))
+                                {
+                                    if let ChunkWaiter::Chunk(_) = &mut *chunk.write().unwrap() {
+                                        to_send.push((chunk_x - 1, chunk_y, chunk_z));
+                                    }
+                                }
+                            } else if x == CHUNK_SIZE - 1 {
+                                if let Some(chunk) =
+                                    chunks.get(&(chunk_x + 1, chunk_y, chunk_z))
+                                {
+                                    if let ChunkWaiter::Chunk(_) = &mut *chunk.write().unwrap() {
+                                        to_send.push((chunk_x + 1, chunk_y, chunk_z));
+                                    }
+                                }
                             }
-                        } else if y == CHUNK_SIZE - 1 {
-                            if let Some(ChunkWaiter::Chunk(chunk)) =
-                                chunks.get_mut(&(chunk_x, chunk_y + 1, chunk_z))
-                            {
-                                chunk.invalidate_mesh();
+
+                            if y == 0 {
+                                if let Some(chunk) =
+                                    chunks.get(&(chunk_x, chunk_y - 1, chunk_z))
+                                {
+                                    if let ChunkWaiter::Chunk(_) = &mut *chunk.write().unwrap() {
+                                        to_send.push((chunk_x, chunk_y - 1, chunk_z));
+                                    }
+                                }
+                            } else if y == CHUNK_SIZE - 1 {
+                                if let Some(chunk) =
+                                    chunks.get(&(chunk_x, chunk_y + 1, chunk_z))
+                                {
+                                    if let ChunkWaiter::Chunk(_) = &mut *chunk.write().unwrap() {
+                                        to_send.push((chunk_x, chunk_y + 1, chunk_z));
+                                    }
+                                }
                             }
+
+                            if z == 0 {
+                                if let Some(chunk) =
+                                    chunks.get(&(chunk_x, chunk_y, chunk_z - 1))
+                                {
+                                    if let ChunkWaiter::Chunk(_) = &mut *chunk.write().unwrap() {
+                                        to_send.push((chunk_x, chunk_y, chunk_z - 1));
+                                    }
+                                }
+                            } else if z == CHUNK_SIZE - 1 {
+                                if let Some(chunk) =
+                                    chunks.get(&(chunk_x, chunk_y, chunk_z + 1))
+                                {
+                                    if let ChunkWaiter::Chunk(_) = &mut *chunk.write().unwrap() {
+                                        to_send.push((chunk_x, chunk_y, chunk_z + 1));
+                                    }
+                                }
+                            }
+
+                            tx.blocking_send(to_send).unwrap();
                         }
 
-                        if z == 0 {
-                            if let Some(ChunkWaiter::Chunk(chunk)) =
-                                chunks.get_mut(&(chunk_x, chunk_y, chunk_z - 1))
-                            {
-                                chunk.invalidate_mesh();
-                            }
-                        } else if z == CHUNK_SIZE - 1 {
-                            if let Some(ChunkWaiter::Chunk(chunk)) =
-                                chunks.get_mut(&(chunk_x, chunk_y, chunk_z + 1))
-                            {
-                                chunk.invalidate_mesh();
-                            }
+                        RaycastAction::Unselect => {
+                            chunk.invalidate_selection();
+                            chunk.select(display, None);
+                        }
+
+                        RaycastAction::Select => {
+                            chunk.invalidate_selection();
+                            chunk.select(display, Some((x, y, z)));
                         }
                     }
 
-                    RaycastAction::Unselect => {
-                        chunk.invalidate_selection();
-                        chunk.select(display, None);
-                    }
-
-                    RaycastAction::Select => {
-                        chunk.invalidate_selection();
-                        chunk.select(display, Some((x, y, z)));
-                    }
+                    break;
                 }
-
-                break;
             }
         }
     }
 
-    pub fn check_loaded_chunks(&mut self, chunks: &mut HashMap<(i32, i32, i32), ChunkWaiter>) {
+    pub fn check_loaded_chunks(&mut self, chunks: &mut HashMap<(i32, i32, i32), RwLock<ChunkWaiter>>) {
         let (chunk_x, chunk_y, chunk_z, ..) =
             Chunk::world_to_chunk_coords(self.position[0], self.position[1], self.position[2]);
         if chunk_x != self.old_chunk_pos[0]
@@ -379,12 +397,14 @@ impl Camera {
             for i in -3..=3 {
                 for j in -3..=3 {
                     for k in -3..=3 {
-                        if let Some(ChunkWaiter::Chunk(chunk)) = chunks.get_mut(&(
+                        if let Some(chunk) = chunks.get(&(
                             self.old_chunk_pos[0] + i,
                             self.old_chunk_pos[1] + j,
                             self.old_chunk_pos[2] + k,
                         )) {
-                            chunk.loaded = false;
+                            if let ChunkWaiter::Chunk(chunk) = &mut *chunk.write().unwrap() {
+                                chunk.loaded = false;
+                            }
                         }
                     }
                 }
@@ -394,14 +414,14 @@ impl Camera {
                 for j in -2..=2 {
                     for k in -2..=2 {
                         match chunks.entry((chunk_x + i, chunk_y + j, chunk_z + k)) {
-                            Entry::Occupied(mut occupied) => {
-                                if let ChunkWaiter::Chunk(chunk) = occupied.get_mut() {
+                            Entry::Occupied(occupied) => {
+                                if let ChunkWaiter::Chunk(chunk) = &mut *occupied.get().write().unwrap() {
                                     chunk.loaded = true;
                                 }
                             }
 
                             Entry::Vacant(vacant) => {
-                                vacant.insert(ChunkWaiter::Timestamp(0));
+                                vacant.insert(RwLock::new(ChunkWaiter::Timestamp(0)));
                             }
                         }
                     }
