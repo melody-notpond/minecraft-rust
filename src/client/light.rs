@@ -18,7 +18,9 @@ impl LightSource {
     }
 
     pub fn as_uint(&self) -> u32 {
-        ((self.red as u32 & 0xf) << 12) | ((self.green as u32 & 0xf) << 8) | ((self.blue as u32 & 0xf) << 4)
+        ((self.red as u32 & 0xf) << 12)
+            | ((self.green as u32 & 0xf) << 8)
+            | ((self.blue as u32 & 0xf) << 4)
     }
 
     pub fn red(&self) -> u8 {

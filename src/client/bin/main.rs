@@ -19,7 +19,7 @@ use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
 
 use minecraft_rust::client::camera::{Camera, RaycastAction};
-use minecraft_rust::client::chunk::{Chunk, ChunkWaiter, Mesh, InstanceData};
+use minecraft_rust::client::chunk::{Chunk, ChunkWaiter, InstanceData, Mesh};
 use minecraft_rust::client::player::Player;
 use minecraft_rust::packet::{ServerPacket, UserPacket};
 
@@ -75,7 +75,12 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
     };
 
     let mut camera = Camera::new(10.0, 0.001, 90.0);
-    let lights = Arc::new(RwLock::new(vec![LightSource::new(15, 15, 15, camera.get_pos())]));
+    let lights = Arc::new(RwLock::new(vec![LightSource::new(
+        15,
+        15,
+        15,
+        camera.get_pos(),
+    )]));
     let mut players = HashMap::new();
     let chunks = Arc::new(RwLock::new(HashMap::new()));
     let square = Mesh::square(&display);
@@ -85,7 +90,10 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
     for x in -3..=3 {
         for y in -1..=1 {
             for z in -3..=3 {
-                chunks.write().unwrap().insert((x, y, z), RwLock::new(ChunkWaiter::Timestamp(0)));
+                chunks
+                    .write()
+                    .unwrap()
+                    .insert((x, y, z), RwLock::new(ChunkWaiter::Timestamp(0)));
             }
         }
     }
@@ -130,7 +138,10 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
                     }
 
                     WindowEvent::KeyboardInput { input, .. }
-                        if locked && camera.move_self(input) => (),
+                        if locked && camera.move_self(input) =>
+                    {
+                        ()
+                    }
 
                     WindowEvent::KeyboardInput { input, .. } if locked => {
                         if let Some(VirtualKeyCode::Semicolon) = input.virtual_keycode {
@@ -149,12 +160,22 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
                         let window = gl_window.window();
                         let size = window.inner_size();
                         let centre = PhysicalPosition::new(size.width / 2, size.height / 2);
-                        camera.raycast(&display, &*chunks.read().unwrap(), RaycastAction::Unselect, &chunk_data_tx);
+                        camera.raycast(
+                            &display,
+                            &*chunks.read().unwrap(),
+                            RaycastAction::Unselect,
+                            &chunk_data_tx,
+                        );
                         camera.turn_self(
                             position.x as i32 - centre.x as i32,
                             position.y as i32 - centre.y as i32,
                         );
-                        camera.raycast(&display, &*chunks.read().unwrap(), RaycastAction::Select, &chunk_data_tx);
+                        camera.raycast(
+                            &display,
+                            &*chunks.read().unwrap(),
+                            RaycastAction::Select,
+                            &chunk_data_tx,
+                        );
                         window.set_cursor_position(centre).unwrap();
                     }
 
@@ -170,7 +191,12 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
                                     &chunk_data_tx,
                                 ),
                                 MouseButton::Right => {
-                                    camera.raycast(&display, &*chunks.read().unwrap(), RaycastAction::Remove, &chunk_data_tx);
+                                    camera.raycast(
+                                        &display,
+                                        &*chunks.read().unwrap(),
+                                        RaycastAction::Remove,
+                                        &chunk_data_tx,
+                                    );
                                 }
 
                                 _ => (),
@@ -238,9 +264,14 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
                         chunk.get_chunk_y(),
                         chunk.get_chunk_z(),
                     );
-                  
+
                     let mut chunks = chunks.write().unwrap();
-                    chunks.insert(coords, RwLock::new(ChunkWaiter::Chunk(Chunk::from_server_chunk(&display, chunk))));
+                    chunks.insert(
+                        coords,
+                        RwLock::new(ChunkWaiter::Chunk(Chunk::from_server_chunk(
+                            &display, chunk,
+                        ))),
+                    );
                     let (x, y, z) = coords;
                     to_send.push((x, y, z));
 
@@ -292,9 +323,19 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
             }
         }
 
-        camera.raycast(&display, &*chunks.read().unwrap(), RaycastAction::Unselect, &chunk_data_tx);
+        camera.raycast(
+            &display,
+            &*chunks.read().unwrap(),
+            RaycastAction::Unselect,
+            &chunk_data_tx,
+        );
         camera.tick(delta);
-        camera.raycast(&display, &*chunks.read().unwrap(), RaycastAction::Select, &chunk_data_tx);
+        camera.raycast(
+            &display,
+            &*chunks.read().unwrap(),
+            RaycastAction::Select,
+            &chunk_data_tx,
+        );
         if camera.is_moving() {
             let _ = tx.try_send(UserPacket::MoveSelf {
                 pos: camera.get_pos(),
@@ -372,7 +413,11 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
 }
 
 #[allow(clippy::type_complexity)]
-fn mesh_loop(chunks: Arc<RwLock<HashMap<(i32, i32, i32), RwLock<ChunkWaiter>>>>, tx: mpsc::Sender<Vec<((i32, i32, i32), Vec<InstanceData>)>>, mut rx: mpsc::Receiver<Vec<(i32, i32, i32)>>) {
+fn mesh_loop(
+    chunks: Arc<RwLock<HashMap<(i32, i32, i32), RwLock<ChunkWaiter>>>>,
+    tx: mpsc::Sender<Vec<((i32, i32, i32), Vec<InstanceData>)>>,
+    mut rx: mpsc::Receiver<Vec<(i32, i32, i32)>>,
+) {
     while let Some(v) = rx.blocking_recv() {
         let mut result = vec![];
         for coords in v {

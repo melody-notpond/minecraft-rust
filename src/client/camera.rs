@@ -1,7 +1,8 @@
 use std::{
     collections::{hash_map::Entry, HashMap},
     convert::TryInto,
-    time::Duration, sync::RwLock,
+    sync::RwLock,
+    time::Duration,
 };
 
 use glium::{
@@ -314,17 +315,13 @@ impl Camera {
 
                             let mut to_send = vec![(chunk_x, chunk_y, chunk_z)];
                             if x == 0 {
-                                if let Some(chunk) =
-                                    chunks.get(&(chunk_x - 1, chunk_y, chunk_z))
-                                {
+                                if let Some(chunk) = chunks.get(&(chunk_x - 1, chunk_y, chunk_z)) {
                                     if let ChunkWaiter::Chunk(_) = &mut *chunk.write().unwrap() {
                                         to_send.push((chunk_x - 1, chunk_y, chunk_z));
                                     }
                                 }
                             } else if x == CHUNK_SIZE - 1 {
-                                if let Some(chunk) =
-                                    chunks.get(&(chunk_x + 1, chunk_y, chunk_z))
-                                {
+                                if let Some(chunk) = chunks.get(&(chunk_x + 1, chunk_y, chunk_z)) {
                                     if let ChunkWaiter::Chunk(_) = &mut *chunk.write().unwrap() {
                                         to_send.push((chunk_x + 1, chunk_y, chunk_z));
                                     }
@@ -332,17 +329,13 @@ impl Camera {
                             }
 
                             if y == 0 {
-                                if let Some(chunk) =
-                                    chunks.get(&(chunk_x, chunk_y - 1, chunk_z))
-                                {
+                                if let Some(chunk) = chunks.get(&(chunk_x, chunk_y - 1, chunk_z)) {
                                     if let ChunkWaiter::Chunk(_) = &mut *chunk.write().unwrap() {
                                         to_send.push((chunk_x, chunk_y - 1, chunk_z));
                                     }
                                 }
                             } else if y == CHUNK_SIZE - 1 {
-                                if let Some(chunk) =
-                                    chunks.get(&(chunk_x, chunk_y + 1, chunk_z))
-                                {
+                                if let Some(chunk) = chunks.get(&(chunk_x, chunk_y + 1, chunk_z)) {
                                     if let ChunkWaiter::Chunk(_) = &mut *chunk.write().unwrap() {
                                         to_send.push((chunk_x, chunk_y + 1, chunk_z));
                                     }
@@ -350,17 +343,13 @@ impl Camera {
                             }
 
                             if z == 0 {
-                                if let Some(chunk) =
-                                    chunks.get(&(chunk_x, chunk_y, chunk_z - 1))
-                                {
+                                if let Some(chunk) = chunks.get(&(chunk_x, chunk_y, chunk_z - 1)) {
                                     if let ChunkWaiter::Chunk(_) = &mut *chunk.write().unwrap() {
                                         to_send.push((chunk_x, chunk_y, chunk_z - 1));
                                     }
                                 }
                             } else if z == CHUNK_SIZE - 1 {
-                                if let Some(chunk) =
-                                    chunks.get(&(chunk_x, chunk_y, chunk_z + 1))
-                                {
+                                if let Some(chunk) = chunks.get(&(chunk_x, chunk_y, chunk_z + 1)) {
                                     if let ChunkWaiter::Chunk(_) = &mut *chunk.write().unwrap() {
                                         to_send.push((chunk_x, chunk_y, chunk_z + 1));
                                     }
@@ -387,7 +376,10 @@ impl Camera {
         }
     }
 
-    pub fn check_loaded_chunks(&mut self, chunks: &mut HashMap<(i32, i32, i32), RwLock<ChunkWaiter>>) {
+    pub fn check_loaded_chunks(
+        &mut self,
+        chunks: &mut HashMap<(i32, i32, i32), RwLock<ChunkWaiter>>,
+    ) {
         let (chunk_x, chunk_y, chunk_z, ..) =
             Chunk::world_to_chunk_coords(self.position[0], self.position[1], self.position[2]);
         if chunk_x != self.old_chunk_pos[0]
@@ -415,7 +407,9 @@ impl Camera {
                     for k in -2..=2 {
                         match chunks.entry((chunk_x + i, chunk_y + j, chunk_z + k)) {
                             Entry::Occupied(occupied) => {
-                                if let ChunkWaiter::Chunk(chunk) = &mut *occupied.get().write().unwrap() {
+                                if let ChunkWaiter::Chunk(chunk) =
+                                    &mut *occupied.get().write().unwrap()
+                                {
                                     chunk.loaded = true;
                                 }
                             }

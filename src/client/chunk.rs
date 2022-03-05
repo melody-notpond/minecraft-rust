@@ -204,11 +204,17 @@ impl Chunk {
                 ],
                 extents: [CHUNK_SIZE as f32 * 0.25; 3],
             },
-            light_buffer: Box::new(UniformBuffer::new(display, [Light {
-                    colour: 0,
-                    reserved: [0; 3],
-                    position: [f32::INFINITY; 3],
-                }; 5]).unwrap()),
+            light_buffer: Box::new(
+                UniformBuffer::new(
+                    display,
+                    [Light {
+                        colour: 0,
+                        reserved: [0; 3],
+                        position: [f32::INFINITY; 3],
+                    }; 5],
+                )
+                .unwrap(),
+            ),
             loaded: true,
         }
     }
@@ -462,9 +468,9 @@ impl Chunk {
 
                 for (new, light) in new.iter_mut().zip(lights) {
                     *new = Light {
-                    colour: light.as_uint(),
-                    reserved: [0; 3],
-                    position: light.location(),
+                        colour: light.as_uint(),
+                        reserved: [0; 3],
+                        position: light.location(),
                     };
                 }
 
