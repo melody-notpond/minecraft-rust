@@ -303,7 +303,7 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
                 light.set_location(camera.get_pos());
             }
 
-            //camera.check_loaded_chunks(&mut *chunks.write().unwrap());
+            camera.check_loaded_chunks(&mut *chunks.write().unwrap());
         }
 
         for (name, player) in players.iter() {
