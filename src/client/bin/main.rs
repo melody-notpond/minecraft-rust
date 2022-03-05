@@ -75,12 +75,11 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
     };
 
     let mut camera = Camera::new(10.0, 0.001, 90.0);
-    let lights = Arc::new(RwLock::new(vec![LightSource::new(
-        15,
-        15,
-        15,
-        camera.get_pos(),
-    )]));
+    let lights = Arc::new(RwLock::new(vec![
+        LightSource::new(10, 10, 10, camera.get_pos()),
+        LightSource::new(10, 11, 12, [8.0, 0.0, 0.0]),
+        LightSource::new(12, 11, 10, [0.0, 0.0, 8.0]),
+    ]));
     let mut players = HashMap::new();
     let chunks = Arc::new(RwLock::new(HashMap::new()));
     let square = Mesh::square(&display);
@@ -138,10 +137,7 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
                     }
 
                     WindowEvent::KeyboardInput { input, .. }
-                        if locked && camera.move_self(input) =>
-                    {
-                        ()
-                    }
+                        if locked && camera.move_self(input) => {},
 
                     WindowEvent::KeyboardInput { input, .. } if locked => {
                         if let Some(VirtualKeyCode::Semicolon) = input.virtual_keycode {
@@ -344,7 +340,7 @@ fn main_loop(tx: mpsc::Sender<UserPacket>, mut rx: mpsc::Receiver<ServerPacket>)
                 light.set_location(camera.get_pos());
             }
 
-            camera.check_loaded_chunks(&mut *chunks.write().unwrap());
+            //camera.check_loaded_chunks(&mut *chunks.write().unwrap());
         }
 
         for (name, player) in players.iter() {

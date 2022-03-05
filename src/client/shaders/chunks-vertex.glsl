@@ -3,7 +3,6 @@
 
 in vec3 position;
 in vec2 tex_coords;
-in vec3 normal;
 in uvec2 data;
 in uint selected;
 
@@ -15,11 +14,11 @@ struct Light {
 uniform mat4 model;
 uniform mat4 view;
 uniform mat4 perspective;
-uniform uint texture_count;
 uniform Lights {
     Light lights[LIGHT_COUNT];
 };
 uniform uint light_count;
+uniform uint texture_count;
 
 out vec3 tex_coords_out;
 out vec3 normal_out;
@@ -132,7 +131,7 @@ void main() {
     vec3 light_colour = vec3(0.0);
     for (uint i = 0u; i < light_count; i++) {
         if (lights[i].colour != 0u) {
-            float dist = distance(lights[i].position, new_model[3].xyz);
+            float dist = distance(lights[i].position, (new_model * face_rotation)[3].xyz);
             vec3 colour = vec3(float((lights[i].colour & 0xf000u) >> 12) / 15.0, float((lights[i].colour & 0x0f00u) >> 8) / 15.0, float((lights[i].colour & 0x00f0u) >> 4) / 15.0);
             light_colour += max(colour - vec3(dist / 7.5), vec3(0.0));
         }
@@ -146,7 +145,7 @@ void main() {
     }
 
     mat4 model_view = view * new_model * face_rotation;
-    normal_out = transpose(inverse(mat3(model_view))) * normal;
+    normal_out = transpose(inverse(mat3(model_view))) * (face_rotation * vec4(0.0, 1.0, 0.0, 1.0)).xyz;
     tex_coords_out = vec3(tex_coords, (float(data.y) + 0.5) / texture_count);
     gl_Position = perspective * model_view * vec4(position, 1.0);
 }

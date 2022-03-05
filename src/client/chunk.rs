@@ -16,10 +16,6 @@ use super::shapes::{Normal, Position, TexCoord};
 
 const LIGHT_COUNT: usize = 5;
 
-const NORM_UP: Normal = Normal {
-    normal: [0.0, 1.0, 0.0],
-};
-
 const SQUARE_POSITIONS: [Position; 4] = [
     Position {
         position: [-0.25, 0.25, -0.25],
@@ -50,15 +46,12 @@ const SQUARE_TEX_COORDS: [TexCoord; 4] = [
     },
 ];
 
-const SQUARE_NORMALS: [Normal; 4] = [NORM_UP, NORM_UP, NORM_UP, NORM_UP];
-
 const SQUARE_INDICES: [u32; 6] = [0, 1, 2, 1, 3, 2];
 
 #[derive(Debug)]
 pub struct Mesh {
     positions: VertexBuffer<Position>,
     tex_coords: VertexBuffer<TexCoord>,
-    normals: VertexBuffer<Normal>,
     indices: IndexBuffer<u32>,
 }
 
@@ -66,14 +59,12 @@ impl Mesh {
     pub fn square(display: &Display) -> Mesh {
         let positions = VertexBuffer::new(display, &SQUARE_POSITIONS).unwrap();
         let tex_coords = VertexBuffer::new(display, &SQUARE_TEX_COORDS).unwrap();
-        let normals = VertexBuffer::new(display, &SQUARE_NORMALS).unwrap();
         let indices =
             IndexBuffer::new(display, PrimitiveType::TrianglesList, &SQUARE_INDICES).unwrap();
 
         Mesh {
             positions,
             tex_coords,
-            normals,
             indices,
         }
     }
@@ -160,11 +151,12 @@ struct Selection {
 implement_vertex!(Selection, selected);
 
 #[derive(Copy, Clone, Debug)]
-#[repr(C, align(128))]
+#[repr(C)]
 struct Light {
     colour: u32,
     reserved: [u32; 3],
     position: [f32; 3],
+    reserved2: u32,
 }
 
 implement_uniform_block!(Light, colour, position);
@@ -211,6 +203,7 @@ impl Chunk {
                         colour: 0,
                         reserved: [0; 3],
                         position: [f32::INFINITY; 3],
+                        reserved2: 0,
                     }; 5],
                 )
                 .unwrap(),
@@ -463,7 +456,8 @@ impl Chunk {
                 let mut new = [Light {
                     colour: 0,
                     reserved: [0; 3],
-                    position: [f32::INFINITY; 3],
+                    position: [0.0; 3],
+                        reserved2: 0,
                 }; LIGHT_COUNT];
 
                 for (new, light) in new.iter_mut().zip(lights) {
@@ -471,6 +465,7 @@ impl Chunk {
                         colour: light.as_uint(),
                         reserved: [0; 3],
                         position: light.location(),
+                        reserved2: 0,
                     };
                 }
 
@@ -490,7 +485,6 @@ impl Chunk {
                         (
                             &square.positions,
                             &square.tex_coords,
-                            &square.normals,
                             data.per_instance().unwrap(),
                             selected.per_instance().unwrap(),
                         ),
