@@ -1,18 +1,29 @@
-use std::time::{Instant, Duration};
+use std::time::{Duration, Instant};
 
-use glium::{glutin::{event::{Event, WindowEvent, StartCause, VirtualKeyCode, ElementState}, event_loop::{ControlFlow, EventLoop}, window::WindowBuilder, ContextBuilder, dpi::PhysicalPosition}, Display, Surface, VertexBuffer, Program, uniform, IndexBuffer, index::PrimitiveType, DrawParameters, Depth, DepthTest, BackfaceCullingMode, PolygonMode};
-use minecraft_rust::client::{rendering, camera::Camera};
+use glium::{
+    glutin::{
+        dpi::PhysicalPosition,
+        event::{ElementState, Event, StartCause, VirtualKeyCode, WindowEvent},
+        event_loop::{ControlFlow, EventLoop},
+        window::WindowBuilder,
+        ContextBuilder,
+    },
+    index::PrimitiveType,
+    uniform, BackfaceCullingMode, Depth, DepthTest, Display, DrawParameters, IndexBuffer,
+    PolygonMode, Program, Surface, VertexBuffer,
+};
+use minecraft_rust::client::{camera::Camera, rendering};
 
 fn main() {
     let event_loop = EventLoop::new();
     let wb = WindowBuilder::new();
-    let cb = ContextBuilder::new()
-        .with_depth_buffer(24);
+    let cb = ContextBuilder::new().with_depth_buffer(24);
     let display = Display::new(wb, cb, &event_loop).expect("could not create window");
 
     let positions = VertexBuffer::new(&display, &rendering::VERTICES).unwrap();
     let normals = VertexBuffer::new(&display, &rendering::NORMALS).unwrap();
-    let indices = IndexBuffer::new(&display, PrimitiveType::TrianglesList, &rendering::INDICES).unwrap();
+    let indices =
+        IndexBuffer::new(&display, PrimitiveType::TrianglesList, &rendering::INDICES).unwrap();
 
     let vs_source = std::fs::read_to_string("src/client/shaders/vertex.glsl").unwrap();
     let fs_source = std::fs::read_to_string("src/client/shaders/fragment.glsl").unwrap();
@@ -79,7 +90,7 @@ fn main() {
                     }
 
                     WindowEvent::KeyboardInput { input, .. }
-                        if locked && camera.move_self(input) => {},
+                        if locked && camera.move_self(input) => {}
 
                     WindowEvent::KeyboardInput { input, .. } if locked => {
                         if let Some(VirtualKeyCode::Semicolon) = input.virtual_keycode {
@@ -154,9 +165,16 @@ fn main() {
             light: light,
         };
 
-        target.draw((&positions, &normals), &indices, &program, &uniforms, &params).unwrap();
+        target
+            .draw(
+                (&positions, &normals),
+                &indices,
+                &program,
+                &uniforms,
+                &params,
+            )
+            .unwrap();
 
         target.finish().unwrap();
     })
 }
-
