@@ -39,7 +39,7 @@ fn main() {
         ..Default::default()
     };
 
-    let mut camera = Camera::new(2.0, 0.01, 110.0);
+    let mut camera = Camera::new(2.0, 0.01, 90.0);
     let mut locked;
 
     {
@@ -157,9 +157,9 @@ fn main() {
             perspective: camera.perspective(&target),
             view: camera.view_matrix(),
             model: [
-                [0.01, 0.0, 0.0, 0.0],
-                [0.0, 0.01, 0.0, 0.0],
-                [0.0, 0.0, 0.01, 0.0],
+                [1.0, 0.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0, 0.0],
+                [0.0, 0.0, 1.0, 0.0],
                 [0.0, 0.0, 0.0, 1.0f32],
             ],
             light: light,

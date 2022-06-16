@@ -22,14 +22,14 @@ impl Camera {
     pub fn new(speed: f32, sensitivity: f32, fov: f32) -> Camera {
         Camera {
             position: [0.0; 3],
-            direction: [1.0, 0.0, 0.0],
+            direction: [0.0, 0.0, -1.0],
             velocity: [0.0; 3],
             pressed: [false; 6],
             speed,
             sensitivity,
             fov: fov.to_radians(),
             z_far: 1024.0,
-            z_near: 0.1,
+            z_near: 0.01,
         }
     }
 
@@ -73,13 +73,13 @@ impl Camera {
             }
 
             Some(VirtualKeyCode::A) if self.pressed[2] != pressed => {
-                self.velocity[2] -= self.speed * mult;
+                self.velocity[2] += self.speed * mult;
                 self.pressed[2] = pressed;
                 true
             }
 
             Some(VirtualKeyCode::D) if self.pressed[3] != pressed => {
-                self.velocity[2] += self.speed * mult;
+                self.velocity[2] -= self.speed * mult;
                 self.pressed[3] = pressed;
                 true
             }
@@ -107,8 +107,8 @@ impl Camera {
         // SINE, COSINE, COSINE, SINE!
         // COSINE, COSINE... SINE-SINE!
         let [old_x, _, old_z] = self.direction;
-        self.direction[0] = old_x * dx.cos() + old_z * dx.sin();
-        self.direction[2] = old_z * dx.cos() - old_x * dx.sin();
+        self.direction[0] = old_x * dx.cos() - old_z * dx.sin();
+        self.direction[2] = old_z * dx.cos() + old_x * dx.sin();
 
         if dy.abs() > f32::EPSILON
             && !((self.direction[1] > 0.999 && dy < 0.0)
@@ -135,7 +135,7 @@ impl Camera {
         let f = 1.0 / (fov / 2.0).tan();
 
         [
-            [f * aspect_ratio, 0.0, 0.0, 0.0],
+            [-f * aspect_ratio, 0.0, 0.0, 0.0],
             [0.0, f, 0.0, 0.0],
             [0.0, 0.0, (z_far + z_near) / (z_far - z_near), 1.0],
             [0.0, 0.0, -(2.0 * z_far * z_near) / (z_far - z_near), 0.0],
