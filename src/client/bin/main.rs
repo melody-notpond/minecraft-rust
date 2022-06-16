@@ -12,18 +12,13 @@ use glium::{
     uniform, BackfaceCullingMode, Depth, DepthTest, Display, DrawParameters, IndexBuffer,
     PolygonMode, Program, Surface, VertexBuffer,
 };
-use minecraft_rust::client::{camera::Camera, rendering};
+use minecraft_rust::client::{camera::Camera, chunk::Cube};
 
 fn main() {
     let event_loop = EventLoop::new();
     let wb = WindowBuilder::new();
     let cb = ContextBuilder::new().with_depth_buffer(24);
     let display = Display::new(wb, cb, &event_loop).expect("could not create window");
-
-    let positions = VertexBuffer::new(&display, &rendering::VERTICES).unwrap();
-    let normals = VertexBuffer::new(&display, &rendering::NORMALS).unwrap();
-    let indices =
-        IndexBuffer::new(&display, PrimitiveType::TrianglesList, &rendering::INDICES).unwrap();
 
     let vs_source = std::fs::read_to_string("src/client/shaders/vertex.glsl").unwrap();
     let fs_source = std::fs::read_to_string("src/client/shaders/fragment.glsl").unwrap();
@@ -39,7 +34,7 @@ fn main() {
         ..Default::default()
     };
 
-    let mut camera = Camera::new(2.0, 0.01, 90.0);
+    let mut camera = Camera::new(2.0, 0.005, 90.0);
     let mut locked;
 
     {
@@ -54,6 +49,8 @@ fn main() {
             window.set_cursor_visible(false);
         }
     }
+
+    let cube = Cube::new(&display, 0, 0, 0);
 
     let mut frame_count = 0;
     let mut last = Instant::now();
@@ -152,28 +149,10 @@ fn main() {
         let mut target = display.draw();
         target.clear_color_and_depth((0.0, 1.0, 0.0, 1.0), 1.0);
 
-        let light = [-1.0, 0.4, 0.9f32];
-        let uniforms = uniform! {
-            perspective: camera.perspective(&target),
-            view: camera.view_matrix(),
-            model: [
-                [1.0, 0.0, 0.0, 0.0],
-                [0.0, 1.0, 0.0, 0.0],
-                [0.0, 0.0, 1.0, 0.0],
-                [0.0, 0.0, 0.0, 1.0f32],
-            ],
-            light: light,
-        };
+        let perspective = camera.perspective(&target);
+        let view = camera.view_matrix();
 
-        target
-            .draw(
-                (&positions, &normals),
-                &indices,
-                &program,
-                &uniforms,
-                &params,
-            )
-            .unwrap();
+        cube.render(&mut target, perspective, view, &program, &params);
 
         target.finish().unwrap();
     })
