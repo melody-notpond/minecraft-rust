@@ -8,9 +8,8 @@ use glium::{
         window::WindowBuilder,
         ContextBuilder,
     },
-    index::PrimitiveType,
-    uniform, BackfaceCullingMode, Depth, DepthTest, Display, DrawParameters, IndexBuffer,
-    PolygonMode, Program, Surface, VertexBuffer,
+    BackfaceCullingMode, Depth, DepthTest, Display, DrawParameters,
+    PolygonMode, Program, Surface,
 };
 use minecraft_rust::client::{camera::Camera, chunk::Cube};
 
