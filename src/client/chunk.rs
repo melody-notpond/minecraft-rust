@@ -1,4 +1,7 @@
-use glium::{VertexBuffer, Display, IndexBuffer, index::PrimitiveType, Frame, Surface, Program, DrawParameters};
+use glium::{
+    index::PrimitiveType, Display, DrawParameters, Frame, IndexBuffer, Program, Surface,
+    VertexBuffer,
+};
 
 #[derive(Copy, Clone)]
 struct Vertex {
@@ -22,10 +25,7 @@ const VERTICES: [Vertex; 4] = [
     },
 ];
 
-const INDICES: [u32; 6] = [
-    0, 1, 2,
-    2, 3, 0,
-];
+const INDICES: [u32; 6] = [0, 1, 2, 2, 3, 0];
 
 pub struct SquareMesh {
     vertices: VertexBuffer<Vertex>,
@@ -52,6 +52,17 @@ struct InstanceData {
     data: (u32, u32),
 }
 
+implement_vertex!(InstanceData, data);
+
+impl InstanceData {
+    fn new(dir: FaceDirection, x: u32, y: u32, z: u32, texture_index: u32) -> InstanceData {
+        let dir = dir as u32;
+        InstanceData {
+            data: (dir | (x << 4) | (y << 8) | (z << 12), texture_index),
+        }
+    }
+}
+
 #[repr(u32)]
 enum FaceDirection {
     Up = 0,
@@ -60,15 +71,6 @@ enum FaceDirection {
     Back = 3,
     Left = 4,
     Right = 5,
-}
-
-impl InstanceData {
-    fn new(dir: FaceDirection, x: u32, y: u32, z: u32, texture_index: u32) -> InstanceData {
-        let dir = dir as u32;
-        InstanceData {
-            data: (dir | (x << 4) | (y << 8) | (z << 12), texture_index)
-        }
-    }
 }
 
 pub struct Cube {
@@ -92,7 +94,14 @@ impl Cube {
         }
     }
 
-    pub fn render(&self, target: &mut Frame, perspective: [[f32; 4]; 4], view: [[f32; 4]; 4], program: &Program, params: &DrawParameters) {
+    pub fn render(
+        &self,
+        target: &mut Frame,
+        perspective: [[f32; 4]; 4],
+        view: [[f32; 4]; 4],
+        program: &Program,
+        params: &DrawParameters,
+    ) {
         let uniforms = uniform! {
             perspective: perspective,
             view: view,
@@ -104,9 +113,17 @@ impl Cube {
             ],
             light: [1.0, 1.0, 1.0f32],
         };
-        target.draw((&self.mesh.vertices, self.instance_data.per_instance().unwrap()), &self.mesh.indices, program, &uniforms, params).unwrap();
+        target
+            .draw(
+                (
+                    &self.mesh.vertices,
+                    self.instance_data.per_instance().unwrap(),
+                ),
+                &self.mesh.indices,
+                program,
+                &uniforms,
+                params,
+            )
+            .unwrap();
     }
 }
-
-implement_vertex!(InstanceData, data);
-
