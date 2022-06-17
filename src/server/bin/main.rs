@@ -1,10 +1,11 @@
-use std::{sync::{Arc, mpsc}, collections::{HashMap, HashSet}, net::SocketAddr, thread::JoinHandle};
+use std::{sync::{Arc, mpsc}, collections::{HashMap, HashSet}, net::SocketAddr, thread::JoinHandle, time::Duration};
 
 use minecraft_rust::{server::NetworkServer, packet::{UserPacket, ServerPacket}};
 
 struct ThreadInfo {
     handler: JoinHandle<()>,
     sender: mpsc::Sender<UserPacket>,
+    username: String,
 }
 
 fn main() {
@@ -44,44 +45,70 @@ fn main() {
                 addr_map.entry(addr).or_insert_with(|| {
                     let (tx, rx) = mpsc::channel();
                     let copy = server.clone();
-                    let handler = std::thread::spawn(move || player_handler(copy, addr, username, rx));
+                    let name = username.clone();
+                    let handler = std::thread::spawn(move || player_handler(copy, addr, name, rx));
                     ThreadInfo {
                         handler,
                         sender: tx,
+                        username,
                     }
                 });
             }
         } else if let Some(thread_info) = addr_map.get(&addr) {
+            let must_join = matches!(packet, UserPacket::Leave);
             match thread_info.sender.send(packet) {
                 Ok(_) => (),
                 Err(_) => {
                     let thread_info = addr_map.remove(&addr).unwrap();
+                    username_set.remove(&thread_info.username);
+                    match thread_info.handler.join() {
+                        Ok(_) => (),
+                        Err(e) => {
+                            eprintln!("thread for {addr} panicked or experienced some other issue: {:?}", e);
+                            match server.send_packet(ServerPacket::Disconnect {
+                                reason: String::from("player thread panicked; check server logs"),
+                            }, addr) {
+                                Ok(_) => (),
+                                Err(e) => eprintln!("could not send disconnect packet: {e}"),
+                            }
+                        }
+                    }
+                }
+            }
+
+            if must_join {
+                    let thread_info = addr_map.remove(&addr).unwrap();
+                    username_set.remove(&thread_info.username);
                     match thread_info.handler.join() {
                         Ok(_) => (),
                         Err(e) => eprintln!("thread for {addr} panicked or experienced some other issue: {:?}", e),
                     }
-
-                    match server.send_packet(ServerPacket::Disconnect {
-                        reason: String::from("player thread panicked; check server logs"),
-                    }, addr) {
-                        Ok(_) => (),
-                        Err(e) => eprintln!("could not send disconnect packet: {e}"),
-                    }
-                }
             }
         }
     }
 }
 
-fn player_handler(_server: Arc<NetworkServer>, _addr: SocketAddr, _username: String, rx: mpsc::Receiver<UserPacket>) {
-    while let Ok(packet) = rx.recv() {
+fn player_handler(server: Arc<NetworkServer>, addr: SocketAddr, username: String, rx: mpsc::Receiver<UserPacket>) {
+    while let Ok(packet) = rx.recv_timeout(Duration::from_secs(20)) {
         match packet {
             UserPacket::JoinRequest { .. } => unreachable!("already handled"),
-            UserPacket::Ping => todo!(),
+            UserPacket::Ping => match server.send_packet(ServerPacket::Pong, addr) {
+                Ok(_) => (),
+                Err(e) => eprintln!("failed to send ping packet: {e}"),
+            },
             UserPacket::Leave => {
-                break;
+                println!("player {username} has left");
+                return;
             }
         }
+    }
+
+    println!("player {username} has timed out");
+    match server.send_packet(ServerPacket::Disconnect {
+        reason: String::from("timed out")
+    }, addr) {
+        Ok(_) => (),
+        Err(e) => eprintln!("failed to send disconnect packet: {e}"),
     }
 }
 

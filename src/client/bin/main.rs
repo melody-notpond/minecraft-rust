@@ -11,13 +11,14 @@ use glium::{
     BackfaceCullingMode, Depth, DepthTest, Display, DrawParameters,
     PolygonMode, Program, Surface,
 };
-use minecraft_rust::client::{camera::Camera, chunk::Chunk, NetworkClient};
+use minecraft_rust::{client::{camera::Camera, chunk::Chunk, NetworkClient}, packet::UserPacket};
 
 fn main() {
     let addr = "0.0.0.0:6942";
     let client = NetworkClient::new("uwu", addr).expect("could not start client");
     let server = "127.0.0.1:6429";
     client.connect_to_server(server).expect("could not connect to server");
+    std::thread::spawn(move || networking_thread(client));
 
     let event_loop = EventLoop::new();
     let wb = WindowBuilder::new();
@@ -160,4 +161,14 @@ fn main() {
 
         target.finish().unwrap();
     })
+}
+
+fn networking_thread(client: NetworkClient) {
+    loop {
+        match client.send_packet(UserPacket::Ping) {
+            Ok(_) => println!("ping"),
+            Err(e) => eprintln!("could not send ping packet: {e}"),
+        }
+        std::thread::sleep(Duration::from_secs(1));
+    }
 }
