@@ -13,7 +13,21 @@ use glium::{
 };
 use minecraft_rust::client::{camera::Camera, chunk::Chunk};
 
+use std::net::UdpSocket;
+
 fn main() {
+    let addr = "0.0.0.0:6942";
+    let socket = match UdpSocket::bind(addr) {
+        Ok(socket) => socket,
+        Err(e) => {
+            eprintln!("Could not bind socket to address {addr}: {e}");
+            std::process::exit(1);
+        }
+    };
+
+    socket.connect("127.0.0.1:6429").expect("could not connect to server");
+    socket.send(&[69, 42]).expect("could not send packet");
+
     let event_loop = EventLoop::new();
     let wb = WindowBuilder::new();
     let cb = ContextBuilder::new().with_depth_buffer(24);
