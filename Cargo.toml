@@ -10,7 +10,7 @@ default = ["client", "server"]
 #client = ["glium", "image", "tobj", "nalgebra"]
 client = ["glium", "nalgebra"]
 #server = ["ctrlc", "noise"]
-server = []
+server = ["ctrlc"]
 
 [[bin]]
 name = "client"
@@ -23,7 +23,7 @@ path = "src/server/bin/main.rs"
 required-features = ["server"]
 
 [dependencies]
-#ctrlc = { version = "*", optional = true }
+ctrlc = { version = "*", optional = true }
 glium = { version = "*", optional = true }
 nalgebra = { version = "*", optional = true }
 #image = { version = "*", optional = true }

@@ -11,22 +11,13 @@ use glium::{
     BackfaceCullingMode, Depth, DepthTest, Display, DrawParameters,
     PolygonMode, Program, Surface,
 };
-use minecraft_rust::client::{camera::Camera, chunk::Chunk};
-
-use std::net::UdpSocket;
+use minecraft_rust::client::{camera::Camera, chunk::Chunk, NetworkClient};
 
 fn main() {
     let addr = "0.0.0.0:6942";
-    let socket = match UdpSocket::bind(addr) {
-        Ok(socket) => socket,
-        Err(e) => {
-            eprintln!("Could not bind socket to address {addr}: {e}");
-            std::process::exit(1);
-        }
-    };
-
-    socket.connect("127.0.0.1:6429").expect("could not connect to server");
-    socket.send(&[69, 42]).expect("could not send packet");
+    let client = NetworkClient::new("uwu", addr).expect("could not start client");
+    let server = "127.0.0.1:6429";
+    client.connect_to_server(server).expect("could not connect to server");
 
     let event_loop = EventLoop::new();
     let wb = WindowBuilder::new();
