@@ -11,7 +11,7 @@ use glium::{
     BackfaceCullingMode, Depth, DepthTest, Display, DrawParameters,
     PolygonMode, Program, Surface,
 };
-use minecraft_rust::client::{camera::Camera, chunk::Cube};
+use minecraft_rust::client::{camera::Camera, chunk::Chunk};
 
 fn main() {
     let event_loop = EventLoop::new();
@@ -49,7 +49,7 @@ fn main() {
         }
     }
 
-    let cube = Cube::new(&display, 0, 0, 0);
+    let chunk = Chunk::new(&display, 0, 0, 0);
 
     let mut frame_count = 0;
     let mut last = Instant::now();
@@ -151,7 +151,7 @@ fn main() {
         let perspective = camera.perspective(&target);
         let view = camera.view_matrix();
 
-        cube.render(&mut target, perspective, view, &program, &params);
+        chunk.render(&mut target, perspective, view, &program, &params);
 
         target.finish().unwrap();
     })

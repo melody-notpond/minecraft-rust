@@ -34,4 +34,4 @@ bincode = "*"
 #tobj = { version = "*", optional = true }
 #tokio = { version = "*", features = ["rt", "net", "macros", "rt-multi-thread", "sync", "time"] }
 #toml = "*"
-#rand = "*"
+rand = "*"
