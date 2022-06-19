@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 
-pub const MAX_PACKET_SIZE: usize = 1024;
+use crate::CHUNK_SIZE;
+
+pub const MAX_PACKET_SIZE: usize = 2usize.pow(20);
 
 /// Packet from user to server
 #[derive(Serialize, Deserialize, Debug)]
@@ -10,6 +12,12 @@ pub enum UserPacket {
     },
     Ping,
     Leave,
+
+    ChunkRequest {
+        x: i32,
+        y: i32,
+        z: i32,
+    },
 }
 
 /// Packet from server to user
@@ -26,4 +34,11 @@ pub enum ServerPacket {
     Disconnect {
         reason: String,
     },
+
+    ChunkData {
+        x: i32,
+        y: i32,
+        z: i32,
+        blocks: Box<[[[u32; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]>,
+    }
 }

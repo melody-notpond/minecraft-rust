@@ -2,6 +2,8 @@ use std::net::{UdpSocket, ToSocketAddrs, SocketAddr};
 
 use crate::packet::{ServerPacket, MAX_PACKET_SIZE, UserPacket};
 
+pub mod chunk;
+
 pub struct NetworkServer {
     socket: UdpSocket,
 }

@@ -1,4 +1,4 @@
-use std::time::{Duration, Instant};
+use std::{time::{Duration, Instant}, sync::{mpsc, Arc}};
 
 use glium::{
     glutin::{
@@ -11,14 +11,19 @@ use glium::{
     BackfaceCullingMode, Depth, DepthTest, Display, DrawParameters,
     PolygonMode, Program, Surface,
 };
-use minecraft_rust::{client::{camera::Camera, chunk::Chunk, NetworkClient}, packet::UserPacket};
+use minecraft_rust::{client::{camera::Camera, chunk::Chunk, NetworkClient}, packet::{UserPacket, ServerPacket}};
 
 fn main() {
     let addr = "0.0.0.0:6942";
     let client = NetworkClient::new("uwu", addr).expect("could not start client");
     let server = "127.0.0.1:6429";
     client.connect_to_server(server).expect("could not connect to server");
-    std::thread::spawn(move || networking_thread(client));
+    let (tx, rx) = mpsc::channel();
+    let client = Arc::new(client);
+    let c = client.clone();
+    std::thread::spawn(move || transmitting_thread(c, rx));
+    let (tx2, rx) = mpsc::channel();
+    std::thread::spawn(move || receiving_thread(client, tx2));
 
     let event_loop = EventLoop::new();
     let wb = WindowBuilder::new();
@@ -55,7 +60,8 @@ fn main() {
         }
     }
 
-    let chunk = Chunk::new(&display, 0, 0, 0);
+    let mut chunk = Chunk::new(&display, 0, 0, 0);
+    tx.send(UserPacket::ChunkRequest { x: 0, y: 0, z: 0 }).expect("temporary");
 
     let mut frame_count = 0;
     let mut last = Instant::now();
@@ -66,6 +72,7 @@ fn main() {
             Event::WindowEvent { event, .. } => {
                 match event {
                     WindowEvent::CloseRequested => {
+                        tx.send(UserPacket::Leave).expect("must be open");
                         *control_flow = ControlFlow::Exit;
                     }
 
@@ -98,9 +105,9 @@ fn main() {
                         if let Some(VirtualKeyCode::Semicolon) = input.virtual_keycode {
                             if input.state == ElementState::Released {
                                 match params.polygon_mode {
-                                    PolygonMode::Point => params.polygon_mode = PolygonMode::Line,
                                     PolygonMode::Line => params.polygon_mode = PolygonMode::Fill,
-                                    PolygonMode::Fill => params.polygon_mode = PolygonMode::Point,
+                                    PolygonMode::Fill => params.polygon_mode = PolygonMode::Line,
+                                    _ => params.polygon_mode = PolygonMode::Fill,
                                 }
                             }
                         }
@@ -142,12 +149,28 @@ fn main() {
         frame_count += 1;
         if last - last_frame >= Duration::from_secs(1) {
             println!("{} frames per second", frame_count);
+            tx.send(UserPacket::Ping).expect("must be open");
             frame_count = 0;
             last_frame = last;
         }
 
         let delta = Instant::now() - last;
         last = Instant::now();
+
+        while let Ok(packet) = rx.try_recv() {
+            match packet {
+                ServerPacket::ConnectionAccepted => println!("connection accepted"),
+                ServerPacket::Pong => println!("ping"),
+                ServerPacket::PlayerJoined { username } => println!("player {username} joined"),
+                ServerPacket::PlayerLeft { username } => println!("player {username} left"),
+                ServerPacket::Disconnect { reason } => println!("disconnected for reason: {reason}"),
+
+                ServerPacket::ChunkData { x: _, y: _, z: _, blocks } => {
+                    chunk.set_blocks(blocks);
+                    chunk.generate_mesh(&display);
+                }
+            }
+        }
 
         camera.tick(delta);
 
@@ -163,12 +186,31 @@ fn main() {
     })
 }
 
-fn networking_thread(client: NetworkClient) {
-    loop {
-        match client.send_packet(UserPacket::Ping) {
-            Ok(_) => println!("ping"),
-            Err(e) => eprintln!("could not send ping packet: {e}"),
+fn transmitting_thread(client: Arc<NetworkClient>, rx: mpsc::Receiver<UserPacket>) {
+    while let Ok(packet) = rx.recv() {
+        let leave = matches!(packet, UserPacket::Leave);
+        match client.send_packet(packet) {
+            Ok(_) => (),
+            Err(e) => eprintln!("could not send packet: {e}"),
         }
-        std::thread::sleep(Duration::from_secs(1));
+
+        if leave {
+            break;
+        }
+    }
+}
+
+fn receiving_thread(client: Arc<NetworkClient>, tx: mpsc::Sender<ServerPacket>) {
+    loop {
+        match client.recv_packet() {
+            Ok(packet) => {
+                let disconnected = matches!(packet, ServerPacket::Disconnect { .. });
+                tx.send(packet).expect("must be open");
+                if disconnected {
+                    break;
+                }
+            }
+            Err(e) => eprintln!("failed to receive packet: {e}"),
+        }
     }
 }

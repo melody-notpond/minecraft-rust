@@ -3,6 +3,8 @@ use glium::{
     VertexBuffer,
 };
 
+use crate::CHUNK_SIZE;
+
 #[derive(Copy, Clone)]
 struct Vertex {
     position: (f32, f32, f32),
@@ -12,16 +14,16 @@ implement_vertex!(Vertex, position);
 
 const VERTICES: [Vertex; 4] = [
     Vertex {
-        position: (-0.25, 0.25, -0.25),
+        position: (-0.125, 0.125, -0.125),
     },
     Vertex {
-        position: (-0.25, 0.25, 0.25),
+        position: (-0.125, 0.125, 0.125),
     },
     Vertex {
-        position: (0.25, 0.25, 0.25),
+        position: (0.125, 0.125, 0.125),
     },
     Vertex {
-        position: (0.25, 0.25, -0.25),
+        position: (0.125, 0.125, -0.125),
     },
 ];
 
@@ -73,13 +75,11 @@ enum FaceDirection {
     Right = 5,
 }
 
-const CHUNK_SIZE: usize = 16;
-
 pub struct Chunk {
     chunk_x: i32,
     chunk_y: i32,
     chunk_z: i32,
-    blocks: Box<[[[bool; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]>,
+    blocks: Box<[[[u32; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]>,
     mesh: SquareMesh,
     data: Option<VertexBuffer<InstanceData>>,
 }
@@ -87,27 +87,19 @@ pub struct Chunk {
 impl Chunk {
     pub fn new(display: &Display, chunk_x: i32, chunk_y: i32, chunk_z: i32) -> Chunk {
         let mesh = SquareMesh::new(display);
-        let mut blocks = Box::new([[[false; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]);
-        for square in blocks.iter_mut() {
-            for row in square.iter_mut() {
-                for block in row.iter_mut() {
-                    *block = rand::random();
-                }
-            }
-        }
 
-        let mut chunk = Chunk {
+        Chunk {
             chunk_x,
             chunk_y,
             chunk_z,
-            blocks,
+            blocks: Box::new([[[0; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]),
             mesh,
             data: None,
-        };
+        }
+    }
 
-        chunk.generate_mesh(display);
-
-        chunk
+    pub fn set_blocks(&mut self, blocks: Box<[[[u32; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]>) {
+        self.blocks = blocks;
     }
 
     pub fn generate_mesh(&mut self, display: &Display) {
@@ -117,23 +109,23 @@ impl Chunk {
         for (x, square) in self.blocks.iter().enumerate() {
             for (y, row) in square.iter().enumerate() {
                 for (z, block) in row.iter().enumerate() {
-                    if *block {
-                        if y >= CHUNK_SIZE - 1 || !self.blocks[x][y + 1][z] {
+                    if *block != 0 {
+                        if y >= CHUNK_SIZE - 1 || self.blocks[x][y + 1][z] == 0 {
                             data.push(InstanceData::new(FaceDirection::Up, x as u32, y as u32, z as u32, 0));
                         }
-                        if y == 0 || !self.blocks[x][y - 1][z] {
+                        if y == 0 || self.blocks[x][y - 1][z] == 0 {
                             data.push(InstanceData::new(FaceDirection::Down, x as u32, y as u32, z as u32, 0));
                         }
-                        if x == 0 || !self.blocks[x - 1][y][z] {
+                        if x == 0 || self.blocks[x - 1][y][z] == 0 {
                             data.push(InstanceData::new(FaceDirection::Right, x as u32, y as u32, z as u32, 0));
                         }
-                        if x >= CHUNK_SIZE - 1 || !self.blocks[x + 1][y][z] {
+                        if x >= CHUNK_SIZE - 1 || self.blocks[x + 1][y][z] == 0 {
                             data.push(InstanceData::new(FaceDirection::Left, x as u32, y as u32, z as u32, 0));
                         }
-                        if z == 0 || !self.blocks[x][y][z - 1] {
+                        if z == 0 || self.blocks[x][y][z - 1] == 0 {
                             data.push(InstanceData::new(FaceDirection::Front, x as u32, y as u32, z as u32, 0));
                         }
-                        if z >= CHUNK_SIZE - 1 || !self.blocks[x][y][z + 1] {
+                        if z >= CHUNK_SIZE - 1 || self.blocks[x][y][z + 1] == 0 {
                             data.push(InstanceData::new(FaceDirection::Back, x as u32, y as u32, z as u32, 0));
                         }
                     }
@@ -160,7 +152,7 @@ impl Chunk {
                     [1.0, 0.0, 0.0, 0.0],
                     [0.0, 1.0, 0.0, 0.0],
                     [0.0, 0.0, 1.0, 0.0],
-                    [self.chunk_x as f32 * 0.5, self.chunk_y as f32 * 0.5, self.chunk_z as f32 * 0.5, 1.0f32],
+                    [self.chunk_x as f32 * 0.25 * CHUNK_SIZE as f32, self.chunk_y as f32 * 0.25 * CHUNK_SIZE as f32, self.chunk_z as f32 * 0.25 * CHUNK_SIZE as f32, 1.0f32],
                 ],
                 light: [1.0, 1.0, 1.0f32],
             };

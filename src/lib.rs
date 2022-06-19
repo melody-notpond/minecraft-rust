@@ -9,3 +9,5 @@ pub mod client;
 pub mod server;
 
 pub mod packet;
+
+pub const CHUNK_SIZE: usize = 16;

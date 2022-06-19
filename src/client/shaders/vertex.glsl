@@ -10,9 +10,9 @@ uniform mat4 view;
 uniform mat4 model;
 
 void main() {
-    float x = float((data.x & 0x00f0u) >>  4u) * 0.5;
-    float y = float((data.x & 0x0f00u) >>  8u) * 0.5;
-    float z = float((data.x & 0xf000u) >> 12u) * 0.5;
+    float x = float((data.x & 0x00f0u) >>  4u) * 0.25;
+    float y = float((data.x & 0x0f00u) >>  8u) * 0.25;
+    float z = float((data.x & 0xf000u) >> 12u) * 0.25;
 
     mat4 new_model = model;
     new_model[3].x += x;

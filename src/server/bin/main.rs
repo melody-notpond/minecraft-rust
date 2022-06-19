@@ -1,6 +1,6 @@
 use std::{sync::{Arc, mpsc}, collections::{HashMap, HashSet}, net::SocketAddr, thread::JoinHandle, time::Duration};
 
-use minecraft_rust::{server::NetworkServer, packet::{UserPacket, ServerPacket}};
+use minecraft_rust::{server::{NetworkServer, chunk::{Chunk, RandomChunkGenerator}}, packet::{UserPacket, ServerPacket}};
 
 struct ThreadInfo {
     handler: JoinHandle<()>,
@@ -89,6 +89,7 @@ fn main() {
 }
 
 fn player_handler(server: Arc<NetworkServer>, addr: SocketAddr, username: String, rx: mpsc::Receiver<UserPacket>) {
+    let mut gen = RandomChunkGenerator;
     while let Ok(packet) = rx.recv_timeout(Duration::from_secs(20)) {
         match packet {
             UserPacket::JoinRequest { .. } => unreachable!("already handled"),
@@ -99,6 +100,11 @@ fn player_handler(server: Arc<NetworkServer>, addr: SocketAddr, username: String
             UserPacket::Leave => {
                 println!("player {username} has left");
                 return;
+            }
+
+            UserPacket::ChunkRequest { x, y, z } => match server.send_packet(Chunk::new(&mut gen, x, y, z).into_packet(), addr) {
+                Ok(_) => (),
+                Err(e) => eprintln!("failed to send chunk data packet: {e}"),
             }
         }
     }
