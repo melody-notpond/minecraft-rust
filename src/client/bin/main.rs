@@ -1,4 +1,8 @@
-use std::{time::{Duration, Instant}, sync::{mpsc, Arc}, collections::HashMap};
+use std::{
+    collections::HashMap,
+    sync::{mpsc, Arc},
+    time::{Duration, Instant},
+};
 
 use glium::{
     glutin::{
@@ -8,16 +12,25 @@ use glium::{
         window::WindowBuilder,
         ContextBuilder,
     },
-    BackfaceCullingMode, Depth, DepthTest, Display, DrawParameters,
-    PolygonMode, Program, Surface,
+    BackfaceCullingMode, Depth, DepthTest, Display, DrawParameters, PolygonMode, Program, Surface,
 };
-use minecraft_rust::{client::{camera::Camera, chunk::{SquareMesh, Chunk, InstanceData, ChunkMesh}, NetworkClient}, packet::{UserPacket, ServerPacket}, CHUNK_SIZE};
+use minecraft_rust::{
+    client::{
+        camera::Camera,
+        chunk::{Chunk, ChunkMesh, InstanceData, SquareMesh},
+        NetworkClient,
+    },
+    packet::{ServerPacket, UserPacket},
+    CHUNK_SIZE,
+};
 
 fn main() {
     let addr = "0.0.0.0:6942";
     let client = NetworkClient::new("uwu", addr).expect("could not start client");
     let server = "127.0.0.1:6429";
-    client.connect_to_server(server).expect("could not connect to server");
+    client
+        .connect_to_server(server)
+        .expect("could not connect to server");
     let (packet_tx, rx) = mpsc::channel();
     let client = Arc::new(client);
     let c = client.clone();
@@ -71,7 +84,9 @@ fn main() {
         for y in -5..5 {
             for z in -5..5 {
                 chunk_waits.insert((x, y, z), Instant::now());
-                packet_tx.send(UserPacket::ChunkRequest { x, y, z }).expect("must be open");
+                packet_tx
+                    .send(UserPacket::ChunkRequest { x, y, z })
+                    .expect("must be open");
             }
         }
     }
@@ -86,7 +101,9 @@ fn main() {
                 match event {
                     WindowEvent::CloseRequested => {
                         packet_tx.send(UserPacket::Leave).expect("must be open");
-                        chunk_tx.send(ChunkHandlerInstruction::Stop).expect("must be open");
+                        chunk_tx
+                            .send(ChunkHandlerInstruction::Stop)
+                            .expect("must be open");
                         *control_flow = ControlFlow::Exit;
                     }
 
@@ -177,12 +194,16 @@ fn main() {
                 ServerPacket::Pong => println!("ping"),
                 ServerPacket::PlayerJoined { username } => println!("player {username} joined"),
                 ServerPacket::PlayerLeft { username } => println!("player {username} left"),
-                ServerPacket::Disconnect { reason } => println!("disconnected for reason: {reason}"),
+                ServerPacket::Disconnect { reason } => {
+                    println!("disconnected for reason: {reason}")
+                }
 
                 ServerPacket::ChunkData { x, y, z, blocks } => {
                     chunk_waits.remove(&(x, y, z));
                     chunks.insert((x, y, z), ChunkMesh::new(&display, x, y, z));
-                    chunk_tx.send(ChunkHandlerInstruction::ChunkData { x, y, z, blocks }).expect("must be open");
+                    chunk_tx
+                        .send(ChunkHandlerInstruction::ChunkData { x, y, z, blocks })
+                        .expect("must be open");
                 }
             }
         }
@@ -197,11 +218,37 @@ fn main() {
         for (&(x, y, z), timestamp) in chunk_waits.iter_mut() {
             if timestamp.elapsed().as_millis() > 800 {
                 *timestamp = Instant::now();
-                packet_tx.send(UserPacket::ChunkRequest { x, y, z }).expect("must be open");
+                packet_tx
+                    .send(UserPacket::ChunkRequest { x, y, z })
+                    .expect("must be open");
             }
         }
 
         camera.tick(delta);
+
+        /*
+        if camera.is_moving() {
+            for (_, chunk) in chunks.iter_mut() {
+                chunk.set_rendering(false);
+            }
+
+            let coords = camera.get_pos();
+            let coords = ((coords[0] / CHUNK_SIZE as f32 / 0.25).round() as i32, (coords[1] / CHUNK_SIZE as f32 / 0.25).round() as i32, (coords[2] / CHUNK_SIZE as f32 / 0.25).round() as i32);
+
+            for x in -5..5 {
+                for y in -5..5 {
+                    for z in -5..5 {
+                        if let Some(chunk) = chunks.get_mut(&(coords.0 + x, coords.1 + y, coords.2 + z)) {
+                            chunk.set_rendering(true);
+                        } else {
+                            chunk_waits.insert((coords.0 + x, coords.1 + y, coords.2 + z), Instant::now());
+                            packet_tx.send(UserPacket::ChunkRequest { x: coords.0 + x, y: coords.1 + y, z: coords.2 + z }).expect("must be open");
+                        }
+                    }
+                }
+            }
+        }
+        */
 
         let mut target = display.draw();
         target.clear_color_and_depth((0.0, 1.0, 0.0, 1.0), 1.0);
@@ -253,42 +300,92 @@ enum ChunkHandlerInstruction {
         y: i32,
         z: i32,
         blocks: Box<[[[u32; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]>,
-    }
+    },
 }
 
 enum ChunkHandlerResult {
-    Mesh {
-        mesh: Vec<InstanceData>,
-    }
+    Mesh { mesh: Vec<InstanceData> },
 }
 
-fn chunk_handler_thread(main_rx: mpsc::Receiver<ChunkHandlerInstruction>, main_tx: mpsc::Sender<((i32, i32, i32), ChunkHandlerResult)>) {
+fn chunk_handler_thread(
+    main_rx: mpsc::Receiver<ChunkHandlerInstruction>,
+    main_tx: mpsc::Sender<((i32, i32, i32), ChunkHandlerResult)>,
+) {
     let mut chunks = HashMap::new();
     while let Ok(instr) = main_rx.recv() {
         match instr {
             ChunkHandlerInstruction::Stop => break,
             ChunkHandlerInstruction::ChunkData { x, y, z, blocks } => {
                 let chunk = Chunk::from_data(x, y, z, blocks);
-                main_tx.send(((x, y, z), ChunkHandlerResult::Mesh { mesh: chunk.generate_mesh(&chunks) })).expect("must be open");
+                main_tx
+                    .send((
+                        (x, y, z),
+                        ChunkHandlerResult::Mesh {
+                            mesh: chunk.generate_mesh(&chunks),
+                        },
+                    ))
+                    .expect("must be open");
                 chunks.insert((x, y, z), chunk);
 
                 if let Some(chunk) = chunks.get(&(x - 1, y, z)) {
-                    main_tx.send(((x - 1, y, z), ChunkHandlerResult::Mesh { mesh: chunk.generate_mesh(&chunks) })).expect("must be open");
+                    main_tx
+                        .send((
+                            (x - 1, y, z),
+                            ChunkHandlerResult::Mesh {
+                                mesh: chunk.generate_mesh(&chunks),
+                            },
+                        ))
+                        .expect("must be open");
                 }
                 if let Some(chunk) = chunks.get(&(x + 1, y, z)) {
-                    main_tx.send(((x + 1, y, z), ChunkHandlerResult::Mesh { mesh: chunk.generate_mesh(&chunks) })).expect("must be open");
+                    main_tx
+                        .send((
+                            (x + 1, y, z),
+                            ChunkHandlerResult::Mesh {
+                                mesh: chunk.generate_mesh(&chunks),
+                            },
+                        ))
+                        .expect("must be open");
                 }
                 if let Some(chunk) = chunks.get(&(x, y - 1, z)) {
-                    main_tx.send(((x, y - 1, z), ChunkHandlerResult::Mesh { mesh: chunk.generate_mesh(&chunks) })).expect("must be open");
+                    main_tx
+                        .send((
+                            (x, y - 1, z),
+                            ChunkHandlerResult::Mesh {
+                                mesh: chunk.generate_mesh(&chunks),
+                            },
+                        ))
+                        .expect("must be open");
                 }
                 if let Some(chunk) = chunks.get(&(x, y + 1, z)) {
-                    main_tx.send(((x, y + 1, z), ChunkHandlerResult::Mesh { mesh: chunk.generate_mesh(&chunks) })).expect("must be open");
+                    main_tx
+                        .send((
+                            (x, y + 1, z),
+                            ChunkHandlerResult::Mesh {
+                                mesh: chunk.generate_mesh(&chunks),
+                            },
+                        ))
+                        .expect("must be open");
                 }
                 if let Some(chunk) = chunks.get(&(x, y, z - 1)) {
-                    main_tx.send(((x, y, z - 1), ChunkHandlerResult::Mesh { mesh: chunk.generate_mesh(&chunks) })).expect("must be open");
+                    main_tx
+                        .send((
+                            (x, y, z - 1),
+                            ChunkHandlerResult::Mesh {
+                                mesh: chunk.generate_mesh(&chunks),
+                            },
+                        ))
+                        .expect("must be open");
                 }
                 if let Some(chunk) = chunks.get(&(x, y, z + 1)) {
-                    main_tx.send(((x, y, z + 1), ChunkHandlerResult::Mesh { mesh: chunk.generate_mesh(&chunks) })).expect("must be open");
+                    main_tx
+                        .send((
+                            (x, y, z + 1),
+                            ChunkHandlerResult::Mesh {
+                                mesh: chunk.generate_mesh(&chunks),
+                            },
+                        ))
+                        .expect("must be open");
                 }
             }
         }

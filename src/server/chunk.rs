@@ -1,11 +1,16 @@
 use noise::{NoiseFn, Perlin, Seedable};
 
-use crate::{CHUNK_SIZE, packet::ServerPacket};
+use crate::{packet::ServerPacket, CHUNK_SIZE};
 
 pub trait ChunkGenerator {
     fn from_seed(seed: u32) -> Self;
 
-    fn generate(&mut self, chunk_x: i32, chunk_y: i32, chunk_z: i32) -> Box<[[[u32; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]>;
+    fn generate(
+        &mut self,
+        chunk_x: i32,
+        chunk_y: i32,
+        chunk_z: i32,
+    ) -> Box<[[[u32; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]>;
 }
 pub struct PerlinChunkGenerator(Perlin);
 
@@ -58,7 +63,8 @@ pub struct Chunk {
 
 impl Chunk {
     pub fn new<G>(gen: &mut G, chunk_x: i32, chunk_y: i32, chunk_z: i32) -> Chunk
-        where G: ChunkGenerator
+    where
+        G: ChunkGenerator,
     {
         Chunk {
             chunk_x,

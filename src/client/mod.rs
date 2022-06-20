@@ -1,6 +1,6 @@
-use std::net::{UdpSocket, ToSocketAddrs};
+use std::net::{ToSocketAddrs, UdpSocket};
 
-use crate::packet::{UserPacket, ServerPacket, MAX_PACKET_SIZE};
+use crate::packet::{ServerPacket, UserPacket, MAX_PACKET_SIZE};
 
 pub mod camera;
 pub mod chunk;
@@ -12,7 +12,8 @@ pub struct NetworkClient {
 
 impl NetworkClient {
     pub fn new<A>(name: &str, addr: A) -> std::io::Result<NetworkClient>
-        where A: ToSocketAddrs
+    where
+        A: ToSocketAddrs,
     {
         Ok(NetworkClient {
             name: String::from(name),
@@ -21,7 +22,8 @@ impl NetworkClient {
     }
 
     pub fn connect_to_server<A>(&self, addr: A) -> std::io::Result<()>
-        where A: ToSocketAddrs
+    where
+        A: ToSocketAddrs,
     {
         self.socket.connect(addr)?;
         self.send_packet(UserPacket::JoinRequest {
@@ -33,7 +35,9 @@ impl NetworkClient {
         let packet = bincode::serialize(&packet).expect("could not serialise packet");
 
         if packet.len() > MAX_PACKET_SIZE {
-            todo!("figure out what to do with packets of size > MAX_PACKET_SIZE ({MAX_PACKET_SIZE})");
+            todo!(
+                "figure out what to do with packets of size > MAX_PACKET_SIZE ({MAX_PACKET_SIZE})"
+            );
         }
 
         self.socket.send(&packet)?;

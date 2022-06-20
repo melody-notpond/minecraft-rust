@@ -42,7 +42,8 @@ impl SquareMesh {
             if SQUARE_MESH.is_none() {
                 SQUARE_MESH = Some(SquareMesh {
                     vertices: VertexBuffer::new(display, &VERTICES).unwrap(),
-                    indices: IndexBuffer::new(display, PrimitiveType::TrianglesList, &INDICES).unwrap(),
+                    indices: IndexBuffer::new(display, PrimitiveType::TrianglesList, &INDICES)
+                        .unwrap(),
                 });
             }
         }
@@ -88,6 +89,7 @@ pub struct ChunkMesh {
     chunk_y: i32,
     chunk_z: i32,
     mesh: VertexBuffer<InstanceData>,
+    rendering: bool,
 }
 
 impl ChunkMesh {
@@ -97,11 +99,16 @@ impl ChunkMesh {
             chunk_y,
             chunk_z,
             mesh: VertexBuffer::new(display, &[]).expect("error creating chunk mesh"),
+            rendering: true,
         }
     }
 
     pub fn replace_mesh(&mut self, display: &Display, new_mesh: Vec<InstanceData>) {
         self.mesh = VertexBuffer::new(display, &new_mesh).expect("error creating chunk mesh");
+    }
+
+    pub fn set_rendering(&mut self, rendering: bool) {
+        self.rendering = rendering;
     }
 
     pub fn render(
@@ -112,6 +119,10 @@ impl ChunkMesh {
         program: &Program,
         params: &DrawParameters,
     ) {
+        if !self.rendering {
+            return;
+        }
+
         let uniforms = uniform! {
             perspective: perspective,
             view: view,
@@ -158,13 +169,18 @@ pub struct Chunk {
 }
 
 impl Chunk {
-    pub fn from_data(chunk_x: i32, chunk_y: i32, chunk_z: i32, blocks: Box<[[[u32; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]>) -> Chunk {
-            Chunk {
-                chunk_x,
-                chunk_y,
-                chunk_z,
-                blocks,
-            }
+    pub fn from_data(
+        chunk_x: i32,
+        chunk_y: i32,
+        chunk_z: i32,
+        blocks: Box<[[[u32; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]>,
+    ) -> Chunk {
+        Chunk {
+            chunk_x,
+            chunk_y,
+            chunk_z,
+            blocks,
+        }
     }
 
     fn get_block(
@@ -220,22 +236,58 @@ impl Chunk {
                     let z = z as isize;
                     if *block != 0 {
                         if self.get_block(chunks, x, y + 1, z) == 0 {
-                            data.push(InstanceData::new(FaceDirection::Up, x as u32, y as u32, z as u32, 0));
+                            data.push(InstanceData::new(
+                                FaceDirection::Up,
+                                x as u32,
+                                y as u32,
+                                z as u32,
+                                0,
+                            ));
                         }
                         if self.get_block(chunks, x, y - 1, z) == 0 {
-                            data.push(InstanceData::new(FaceDirection::Down, x as u32, y as u32, z as u32, 0));
+                            data.push(InstanceData::new(
+                                FaceDirection::Down,
+                                x as u32,
+                                y as u32,
+                                z as u32,
+                                0,
+                            ));
                         }
                         if self.get_block(chunks, x - 1, y, z) == 0 {
-                            data.push(InstanceData::new(FaceDirection::Right, x as u32, y as u32, z as u32, 0));
+                            data.push(InstanceData::new(
+                                FaceDirection::Right,
+                                x as u32,
+                                y as u32,
+                                z as u32,
+                                0,
+                            ));
                         }
                         if self.get_block(chunks, x + 1, y, z) == 0 {
-                            data.push(InstanceData::new(FaceDirection::Left, x as u32, y as u32, z as u32, 0));
+                            data.push(InstanceData::new(
+                                FaceDirection::Left,
+                                x as u32,
+                                y as u32,
+                                z as u32,
+                                0,
+                            ));
                         }
                         if self.get_block(chunks, x, y, z - 1) == 0 {
-                            data.push(InstanceData::new(FaceDirection::Front, x as u32, y as u32, z as u32, 0));
+                            data.push(InstanceData::new(
+                                FaceDirection::Front,
+                                x as u32,
+                                y as u32,
+                                z as u32,
+                                0,
+                            ));
                         }
                         if self.get_block(chunks, x, y, z + 1) == 0 {
-                            data.push(InstanceData::new(FaceDirection::Back, x as u32, y as u32, z as u32, 0));
+                            data.push(InstanceData::new(
+                                FaceDirection::Back,
+                                x as u32,
+                                y as u32,
+                                z as u32,
+                                0,
+                            ));
                         }
                     }
                 }
@@ -257,4 +309,3 @@ impl Chunk {
         self.chunk_z
     }
 }
-

@@ -1,6 +1,18 @@
-use std::{sync::{Arc, mpsc}, collections::{HashMap, HashSet}, net::SocketAddr, thread::JoinHandle, time::Duration};
+use std::{
+    collections::{HashMap, HashSet},
+    net::SocketAddr,
+    sync::{mpsc, Arc},
+    thread::JoinHandle,
+    time::Duration,
+};
 
-use minecraft_rust::{server::{NetworkServer, chunk::{Chunk, PerlinChunkGenerator, ChunkGenerator}}, packet::{UserPacket, ServerPacket}};
+use minecraft_rust::{
+    packet::{ServerPacket, UserPacket},
+    server::{
+        chunk::{Chunk, ChunkGenerator, PerlinChunkGenerator},
+        NetworkServer,
+    },
+};
 
 struct ThreadInfo {
     handler: JoinHandle<()>,
@@ -28,9 +40,12 @@ fn main() {
         if let UserPacket::JoinRequest { username } = packet {
             println!("got join request from {username}");
             if username_set.contains(&username) {
-                match server.send_packet(ServerPacket::Disconnect {
-                    reason: String::from("username already taken!"),
-                }, addr) {
+                match server.send_packet(
+                    ServerPacket::Disconnect {
+                        reason: String::from("username already taken!"),
+                    },
+                    addr,
+                ) {
                     Ok(_) => (),
                     Err(e) => eprintln!("could not send disconnect packet: {e}"),
                 }
@@ -64,10 +79,18 @@ fn main() {
                     match thread_info.handler.join() {
                         Ok(_) => (),
                         Err(e) => {
-                            eprintln!("thread for {addr} panicked or experienced some other issue: {:?}", e);
-                            match server.send_packet(ServerPacket::Disconnect {
-                                reason: String::from("player thread panicked; check server logs"),
-                            }, addr) {
+                            eprintln!(
+                                "thread for {addr} panicked or experienced some other issue: {:?}",
+                                e
+                            );
+                            match server.send_packet(
+                                ServerPacket::Disconnect {
+                                    reason: String::from(
+                                        "player thread panicked; check server logs",
+                                    ),
+                                },
+                                addr,
+                            ) {
                                 Ok(_) => (),
                                 Err(e) => eprintln!("could not send disconnect packet: {e}"),
                             }
@@ -77,18 +100,26 @@ fn main() {
             }
 
             if must_join {
-                    let thread_info = addr_map.remove(&addr).unwrap();
-                    username_set.remove(&thread_info.username);
-                    match thread_info.handler.join() {
-                        Ok(_) => (),
-                        Err(e) => eprintln!("thread for {addr} panicked or experienced some other issue: {:?}", e),
-                    }
+                let thread_info = addr_map.remove(&addr).unwrap();
+                username_set.remove(&thread_info.username);
+                match thread_info.handler.join() {
+                    Ok(_) => (),
+                    Err(e) => eprintln!(
+                        "thread for {addr} panicked or experienced some other issue: {:?}",
+                        e
+                    ),
+                }
             }
         }
     }
 }
 
-fn player_handler(server: Arc<NetworkServer>, addr: SocketAddr, username: String, rx: mpsc::Receiver<UserPacket>) {
+fn player_handler(
+    server: Arc<NetworkServer>,
+    addr: SocketAddr,
+    username: String,
+    rx: mpsc::Receiver<UserPacket>,
+) {
     let mut gen = PerlinChunkGenerator::from_seed(0);
     while let Ok(packet) = rx.recv_timeout(Duration::from_secs(20)) {
         match packet {
@@ -102,19 +133,23 @@ fn player_handler(server: Arc<NetworkServer>, addr: SocketAddr, username: String
                 return;
             }
 
-            UserPacket::ChunkRequest { x, y, z } => match server.send_packet(Chunk::new(&mut gen, x, y, z).into_packet(), addr) {
-                Ok(_) => (),
-                Err(e) => eprintln!("failed to send chunk data packet: {e}"),
+            UserPacket::ChunkRequest { x, y, z } => {
+                match server.send_packet(Chunk::new(&mut gen, x, y, z).into_packet(), addr) {
+                    Ok(_) => (),
+                    Err(e) => eprintln!("failed to send chunk data packet: {e}"),
+                }
             }
         }
     }
 
     println!("player {username} has timed out");
-    match server.send_packet(ServerPacket::Disconnect {
-        reason: String::from("timed out")
-    }, addr) {
+    match server.send_packet(
+        ServerPacket::Disconnect {
+            reason: String::from("timed out"),
+        },
+        addr,
+    ) {
         Ok(_) => (),
         Err(e) => eprintln!("failed to send disconnect packet: {e}"),
     }
 }
-
