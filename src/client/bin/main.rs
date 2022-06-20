@@ -269,8 +269,27 @@ fn chunk_handler_thread(main_rx: mpsc::Receiver<ChunkHandlerInstruction>, main_t
             ChunkHandlerInstruction::Stop => break,
             ChunkHandlerInstruction::ChunkData { x, y, z, blocks } => {
                 let chunk = Chunk::from_data(x, y, z, blocks);
-                main_tx.send(((x, y, z), ChunkHandlerResult::Mesh { mesh: chunk.generate_mesh() })).expect("must be open");
+                main_tx.send(((x, y, z), ChunkHandlerResult::Mesh { mesh: chunk.generate_mesh(&chunks) })).expect("must be open");
                 chunks.insert((x, y, z), chunk);
+
+                if let Some(chunk) = chunks.get(&(x - 1, y, z)) {
+                    main_tx.send(((x - 1, y, z), ChunkHandlerResult::Mesh { mesh: chunk.generate_mesh(&chunks) })).expect("must be open");
+                }
+                if let Some(chunk) = chunks.get(&(x + 1, y, z)) {
+                    main_tx.send(((x + 1, y, z), ChunkHandlerResult::Mesh { mesh: chunk.generate_mesh(&chunks) })).expect("must be open");
+                }
+                if let Some(chunk) = chunks.get(&(x, y - 1, z)) {
+                    main_tx.send(((x, y - 1, z), ChunkHandlerResult::Mesh { mesh: chunk.generate_mesh(&chunks) })).expect("must be open");
+                }
+                if let Some(chunk) = chunks.get(&(x, y + 1, z)) {
+                    main_tx.send(((x, y + 1, z), ChunkHandlerResult::Mesh { mesh: chunk.generate_mesh(&chunks) })).expect("must be open");
+                }
+                if let Some(chunk) = chunks.get(&(x, y, z - 1)) {
+                    main_tx.send(((x, y, z - 1), ChunkHandlerResult::Mesh { mesh: chunk.generate_mesh(&chunks) })).expect("must be open");
+                }
+                if let Some(chunk) = chunks.get(&(x, y, z + 1)) {
+                    main_tx.send(((x, y, z + 1), ChunkHandlerResult::Mesh { mesh: chunk.generate_mesh(&chunks) })).expect("must be open");
+                }
             }
         }
     }

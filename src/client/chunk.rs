@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use glium::{
     index::PrimitiveType, Display, DrawParameters, Frame, IndexBuffer, Program, Surface,
     VertexBuffer,
@@ -165,29 +167,74 @@ impl Chunk {
             }
     }
 
-    pub fn generate_mesh(&self) -> Vec<InstanceData> {
+    fn get_block(
+        &self,
+        chunks: &HashMap<(i32, i32, i32), Chunk>,
+        x: isize,
+        y: isize,
+        z: isize,
+    ) -> u32 {
+        if x < 0 {
+            chunks
+                .get(&(self.chunk_x - 1, self.chunk_y, self.chunk_z))
+                .map(|v| v.blocks[CHUNK_SIZE - 1][y as usize][z as usize])
+                .unwrap_or(0)
+        } else if x > CHUNK_SIZE as isize - 1 {
+            chunks
+                .get(&(self.chunk_x + 1, self.chunk_y, self.chunk_z))
+                .map(|v| v.blocks[0][y as usize][z as usize])
+                .unwrap_or(0)
+        } else if y < 0 {
+            chunks
+                .get(&(self.chunk_x, self.chunk_y - 1, self.chunk_z))
+                .map(|v| v.blocks[x as usize][CHUNK_SIZE - 1][z as usize])
+                .unwrap_or(0)
+        } else if y > CHUNK_SIZE as isize - 1 {
+            chunks
+                .get(&(self.chunk_x, self.chunk_y + 1, self.chunk_z))
+                .map(|v| v.blocks[x as usize][0][z as usize])
+                .unwrap_or(0)
+        } else if z < 0 {
+            chunks
+                .get(&(self.chunk_x, self.chunk_y, self.chunk_z - 1))
+                .map(|v| v.blocks[x as usize][y as usize][CHUNK_SIZE - 1])
+                .unwrap_or(0)
+        } else if z > CHUNK_SIZE as isize - 1 {
+            chunks
+                .get(&(self.chunk_x, self.chunk_y, self.chunk_z + 1))
+                .map(|v| v.blocks[x as usize][y as usize][0])
+                .unwrap_or(0)
+        } else {
+            self.blocks[x as usize][y as usize][z as usize]
+        }
+    }
+
+    pub fn generate_mesh(&self, chunks: &HashMap<(i32, i32, i32), Chunk>) -> Vec<InstanceData> {
         let mut data = vec![];
 
         for (x, square) in self.blocks.iter().enumerate() {
+            let x = x as isize;
             for (y, row) in square.iter().enumerate() {
+                let y = y as isize;
                 for (z, block) in row.iter().enumerate() {
+                    let z = z as isize;
                     if *block != 0 {
-                        if y >= CHUNK_SIZE - 1 || self.blocks[x][y + 1][z] == 0 {
+                        if self.get_block(chunks, x, y + 1, z) == 0 {
                             data.push(InstanceData::new(FaceDirection::Up, x as u32, y as u32, z as u32, 0));
                         }
-                        if y == 0 || self.blocks[x][y - 1][z] == 0 {
+                        if self.get_block(chunks, x, y - 1, z) == 0 {
                             data.push(InstanceData::new(FaceDirection::Down, x as u32, y as u32, z as u32, 0));
                         }
-                        if x == 0 || self.blocks[x - 1][y][z] == 0 {
+                        if self.get_block(chunks, x - 1, y, z) == 0 {
                             data.push(InstanceData::new(FaceDirection::Right, x as u32, y as u32, z as u32, 0));
                         }
-                        if x >= CHUNK_SIZE - 1 || self.blocks[x + 1][y][z] == 0 {
+                        if self.get_block(chunks, x + 1, y, z) == 0 {
                             data.push(InstanceData::new(FaceDirection::Left, x as u32, y as u32, z as u32, 0));
                         }
-                        if z == 0 || self.blocks[x][y][z - 1] == 0 {
+                        if self.get_block(chunks, x, y, z - 1) == 0 {
                             data.push(InstanceData::new(FaceDirection::Front, x as u32, y as u32, z as u32, 0));
                         }
-                        if z >= CHUNK_SIZE - 1 || self.blocks[x][y][z + 1] == 0 {
+                        if self.get_block(chunks, x, y, z + 1) == 0 {
                             data.push(InstanceData::new(FaceDirection::Back, x as u32, y as u32, z as u32, 0));
                         }
                     }
