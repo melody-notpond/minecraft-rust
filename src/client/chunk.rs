@@ -35,16 +35,22 @@ pub struct SquareMesh {
 }
 
 impl SquareMesh {
-    pub fn new(display: &Display) -> SquareMesh {
-        SquareMesh {
-            vertices: VertexBuffer::new(display, &VERTICES).unwrap(),
-            indices: IndexBuffer::new(display, PrimitiveType::TrianglesList, &INDICES).unwrap(),
+    pub fn init(display: &Display) {
+        unsafe {
+            if SQUARE_MESH.is_none() {
+                SQUARE_MESH = Some(SquareMesh {
+                    vertices: VertexBuffer::new(display, &VERTICES).unwrap(),
+                    indices: IndexBuffer::new(display, PrimitiveType::TrianglesList, &INDICES).unwrap(),
+                });
+            }
         }
     }
 }
 
+static mut SQUARE_MESH: Option<SquareMesh> = None;
+
 #[derive(Copy, Clone)]
-struct InstanceData {
+pub struct InstanceData {
     ///   0-3: face direction
     ///   4-7: x
     ///  8-11: y
@@ -75,35 +81,91 @@ enum FaceDirection {
     Right = 5,
 }
 
+pub struct ChunkMesh {
+    chunk_x: i32,
+    chunk_y: i32,
+    chunk_z: i32,
+    mesh: VertexBuffer<InstanceData>,
+}
+
+impl ChunkMesh {
+    pub fn new(display: &Display, chunk_x: i32, chunk_y: i32, chunk_z: i32) -> ChunkMesh {
+        ChunkMesh {
+            chunk_x,
+            chunk_y,
+            chunk_z,
+            mesh: VertexBuffer::new(display, &[]).expect("error creating chunk mesh"),
+        }
+    }
+
+    pub fn replace_mesh(&mut self, display: &Display, new_mesh: Vec<InstanceData>) {
+        self.mesh = VertexBuffer::new(display, &new_mesh).expect("error creating chunk mesh");
+    }
+
+    pub fn render(
+        &self,
+        target: &mut Frame,
+        perspective: [[f32; 4]; 4],
+        view: [[f32; 4]; 4],
+        program: &Program,
+        params: &DrawParameters,
+    ) {
+        let uniforms = uniform! {
+            perspective: perspective,
+            view: view,
+            model: [
+                [1.0, 0.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0, 0.0],
+                [0.0, 0.0, 1.0, 0.0],
+                [self.chunk_x as f32 * 0.25 * CHUNK_SIZE as f32, self.chunk_y as f32 * 0.25 * CHUNK_SIZE as f32, self.chunk_z as f32 * 0.25 * CHUNK_SIZE as f32, 1.0f32],
+            ],
+            light: [1.0, 1.0, 1.0f32],
+        };
+        target
+            .draw(
+                (
+                    unsafe { &SQUARE_MESH.as_ref().unwrap().vertices },
+                    self.mesh.per_instance().unwrap(),
+                ),
+                unsafe { &SQUARE_MESH.as_ref().unwrap().indices },
+                program,
+                &uniforms,
+                params,
+            )
+            .unwrap();
+    }
+
+    pub fn chunk_x(&self) -> i32 {
+        self.chunk_x
+    }
+
+    pub fn chunk_y(&self) -> i32 {
+        self.chunk_y
+    }
+
+    pub fn chunk_z(&self) -> i32 {
+        self.chunk_z
+    }
+}
+
 pub struct Chunk {
     chunk_x: i32,
     chunk_y: i32,
     chunk_z: i32,
     blocks: Box<[[[u32; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]>,
-    mesh: SquareMesh,
-    data: Option<VertexBuffer<InstanceData>>,
 }
 
 impl Chunk {
-    pub fn new(display: &Display, chunk_x: i32, chunk_y: i32, chunk_z: i32) -> Chunk {
-        let mesh = SquareMesh::new(display);
-
-        Chunk {
-            chunk_x,
-            chunk_y,
-            chunk_z,
-            blocks: Box::new([[[0; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]),
-            mesh,
-            data: None,
-        }
+    pub fn from_data(chunk_x: i32, chunk_y: i32, chunk_z: i32, blocks: Box<[[[u32; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]>) -> Chunk {
+            Chunk {
+                chunk_x,
+                chunk_y,
+                chunk_z,
+                blocks,
+            }
     }
 
-    pub fn set_blocks(&mut self, blocks: Box<[[[u32; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]>) {
-        self.blocks = blocks;
-    }
-
-    pub fn generate_mesh(&mut self, display: &Display) {
-        self.data = None;
+    pub fn generate_mesh(&self) -> Vec<InstanceData> {
         let mut data = vec![];
 
         for (x, square) in self.blocks.iter().enumerate() {
@@ -133,41 +195,19 @@ impl Chunk {
             }
         }
 
-        self.data = Some(VertexBuffer::new(display, &data).unwrap());
+        data
     }
 
-    pub fn render(
-        &self,
-        target: &mut Frame,
-        perspective: [[f32; 4]; 4],
-        view: [[f32; 4]; 4],
-        program: &Program,
-        params: &DrawParameters,
-    ) {
-        if let Some(data) = &self.data {
-            let uniforms = uniform! {
-                perspective: perspective,
-                view: view,
-                model: [
-                    [1.0, 0.0, 0.0, 0.0],
-                    [0.0, 1.0, 0.0, 0.0],
-                    [0.0, 0.0, 1.0, 0.0],
-                    [self.chunk_x as f32 * 0.25 * CHUNK_SIZE as f32, self.chunk_y as f32 * 0.25 * CHUNK_SIZE as f32, self.chunk_z as f32 * 0.25 * CHUNK_SIZE as f32, 1.0f32],
-                ],
-                light: [1.0, 1.0, 1.0f32],
-            };
-            target
-                .draw(
-                    (
-                        &self.mesh.vertices,
-                        data.per_instance().unwrap(),
-                    ),
-                    &self.mesh.indices,
-                    program,
-                    &uniforms,
-                    params,
-                )
-                .unwrap();
-        }
+    pub fn chunk_x(&self) -> i32 {
+        self.chunk_x
+    }
+
+    pub fn chunk_y(&self) -> i32 {
+        self.chunk_y
+    }
+
+    pub fn chunk_z(&self) -> i32 {
+        self.chunk_z
     }
 }
+
