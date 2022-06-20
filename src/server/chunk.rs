@@ -1,25 +1,44 @@
+use noise::{NoiseFn, Perlin, Seedable};
+
 use crate::{CHUNK_SIZE, packet::ServerPacket};
 
-pub trait ChunkGenerator: Default {
+pub trait ChunkGenerator {
     fn from_seed(seed: u32) -> Self;
 
     fn generate(&mut self, chunk_x: i32, chunk_y: i32, chunk_z: i32) -> Box<[[[u32; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]>;
 }
+pub struct PerlinChunkGenerator(Perlin);
 
-#[derive(Default)]
-pub struct RandomChunkGenerator;
-
-impl ChunkGenerator for RandomChunkGenerator {
-    fn from_seed(_seed: u32) -> Self {
-        RandomChunkGenerator
+impl ChunkGenerator for PerlinChunkGenerator {
+    fn from_seed(seed: u32) -> Self {
+        PerlinChunkGenerator(Perlin::new().set_seed(seed))
     }
 
-    fn generate(&mut self, _chunk_x: i32, _chunk_y: i32, _chunk_z: i32) -> Box<[[[u32; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]> {
+    fn generate(
+        &mut self,
+        chunk_x: i32,
+        chunk_y: i32,
+        chunk_z: i32,
+    ) -> Box<[[[u32; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]> {
         let mut blocks = Box::new([[[0; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]);
-        for square in blocks.iter_mut() {
-            for row in square.iter_mut() {
-                for block in row.iter_mut() {
-                    if rand::random() {
+
+        let chunk_x = chunk_x as f64;
+        let chunk_y = chunk_y as f64;
+        let chunk_z = chunk_z as f64;
+        for (x, square) in blocks.iter_mut().enumerate() {
+            let x = x as f64;
+            for (y, line) in square.iter_mut().enumerate() {
+                let y = y as f64;
+                for (z, block) in line.iter_mut().enumerate() {
+                    let z = z as f64;
+                    let coords = [
+                        (chunk_x * CHUNK_SIZE as f64 + x) / 40.0,
+                        (chunk_y * CHUNK_SIZE as f64 + y) / 40.0,
+                        (chunk_z * CHUNK_SIZE as f64 + z) / 40.0,
+                    ];
+                    let height = self.0.get(coords);
+
+                    if height >= 0.5 {
                         *block = 1;
                     }
                 }

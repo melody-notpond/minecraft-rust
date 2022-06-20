@@ -9,8 +9,7 @@ edition = "2021"
 default = ["client", "server"]
 #client = ["glium", "image", "tobj", "nalgebra"]
 client = ["glium", "nalgebra"]
-#server = ["ctrlc", "noise"]
-server = ["ctrlc"]
+server = ["ctrlc", "noise"]
 
 [[bin]]
 name = "client"
@@ -27,7 +26,7 @@ ctrlc = { version = "*", optional = true }
 glium = { version = "*", optional = true }
 nalgebra = { version = "*", optional = true }
 #image = { version = "*", optional = true }
-#noise = { version = "*", optional = true }
+noise = { version = "*", optional = true }
 serde = { version = "*", features = ["derive"] }
 bincode = "*"
 #lazy_static = "*"

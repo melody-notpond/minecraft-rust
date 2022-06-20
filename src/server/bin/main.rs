@@ -1,6 +1,6 @@
 use std::{sync::{Arc, mpsc}, collections::{HashMap, HashSet}, net::SocketAddr, thread::JoinHandle, time::Duration};
 
-use minecraft_rust::{server::{NetworkServer, chunk::{Chunk, RandomChunkGenerator}}, packet::{UserPacket, ServerPacket}};
+use minecraft_rust::{server::{NetworkServer, chunk::{Chunk, PerlinChunkGenerator, ChunkGenerator}}, packet::{UserPacket, ServerPacket}};
 
 struct ThreadInfo {
     handler: JoinHandle<()>,
@@ -89,7 +89,7 @@ fn main() {
 }
 
 fn player_handler(server: Arc<NetworkServer>, addr: SocketAddr, username: String, rx: mpsc::Receiver<UserPacket>) {
-    let mut gen = RandomChunkGenerator;
+    let mut gen = PerlinChunkGenerator::from_seed(0);
     while let Ok(packet) = rx.recv_timeout(Duration::from_secs(20)) {
         match packet {
             UserPacket::JoinRequest { .. } => unreachable!("already handled"),

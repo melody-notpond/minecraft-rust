@@ -67,9 +67,9 @@ fn main() {
     let mut chunks = HashMap::new();
     let mut chunk_waits = HashMap::new();
 
-    for x in -10..10 {
-        for y in 0..1 {
-            for z in -10..10 {
+    for x in -5..5 {
+        for y in -5..5 {
+            for z in -5..5 {
                 chunk_waits.insert((x, y, z), Instant::now());
                 packet_tx.send(UserPacket::ChunkRequest { x, y, z }).expect("must be open");
             }
