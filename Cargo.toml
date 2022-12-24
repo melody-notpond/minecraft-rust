@@ -5,10 +5,13 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[profile.release]
+debug = true
+
 [features]
 default = ["client", "server"]
 #client = ["glium", "image", "tobj", "nalgebra"]
-client = ["glium", "nalgebra"]
+client = ["glium"]
 server = ["ctrlc", "noise"]
 
 [[bin]]
@@ -24,13 +27,12 @@ required-features = ["server"]
 [dependencies]
 ctrlc = { version = "*", optional = true }
 glium = { version = "*", optional = true }
-nalgebra = { version = "*", optional = true }
+#nalgebra = { version = "*", optional = true }
 #image = { version = "*", optional = true }
 noise = { version = "*", optional = true }
 serde = { version = "*", features = ["derive"] }
 bincode = "*"
 #lazy_static = "*"
 #tobj = { version = "*", optional = true }
-#tokio = { version = "*", features = ["rt", "net", "macros", "rt-multi-thread", "sync", "time"] }
 #toml = "*"
-rand = "*"
+#rand = "*"

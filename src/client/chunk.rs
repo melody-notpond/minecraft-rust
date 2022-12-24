@@ -88,23 +88,35 @@ pub struct ChunkMesh {
     chunk_x: i32,
     chunk_y: i32,
     chunk_z: i32,
-    mesh: VertexBuffer<InstanceData>,
+    mesh: Option<VertexBuffer<InstanceData>>,
     rendering: bool,
 }
 
 impl ChunkMesh {
-    pub fn new(display: &Display, chunk_x: i32, chunk_y: i32, chunk_z: i32) -> ChunkMesh {
+    pub fn new(chunk_x: i32, chunk_y: i32, chunk_z: i32) -> ChunkMesh {
         ChunkMesh {
             chunk_x,
             chunk_y,
             chunk_z,
-            mesh: VertexBuffer::new(display, &[]).expect("error creating chunk mesh"),
+            mesh: None,
             rendering: true,
         }
     }
 
     pub fn replace_mesh(&mut self, display: &Display, new_mesh: Vec<InstanceData>) {
-        self.mesh = VertexBuffer::new(display, &new_mesh).expect("error creating chunk mesh");
+        if self.rendering {
+            self.mesh = Some(VertexBuffer::new(display, &new_mesh).expect("error creating chunk mesh"));
+        }
+    }
+
+    pub fn invalidate_mesh(&mut self) {
+        if !self.rendering {
+            self.mesh = None;
+        }
+    }
+
+    pub fn has_mesh(&self) -> bool {
+        self.mesh.is_some()
     }
 
     pub fn set_rendering(&mut self, rendering: bool) {
@@ -123,29 +135,31 @@ impl ChunkMesh {
             return;
         }
 
-        let uniforms = uniform! {
-            perspective: perspective,
-            view: view,
-            model: [
-                [1.0, 0.0, 0.0, 0.0],
-                [0.0, 1.0, 0.0, 0.0],
-                [0.0, 0.0, 1.0, 0.0],
-                [self.chunk_x as f32 * 0.25 * CHUNK_SIZE as f32, self.chunk_y as f32 * 0.25 * CHUNK_SIZE as f32, self.chunk_z as f32 * 0.25 * CHUNK_SIZE as f32, 1.0f32],
-            ],
-            light: [1.0, 1.0, 1.0f32],
-        };
-        target
-            .draw(
-                (
-                    unsafe { &SQUARE_MESH.as_ref().unwrap().vertices },
-                    self.mesh.per_instance().unwrap(),
-                ),
-                unsafe { &SQUARE_MESH.as_ref().unwrap().indices },
-                program,
-                &uniforms,
-                params,
-            )
-            .unwrap();
+        if let Some(mesh) = &self.mesh {
+            let uniforms = uniform! {
+                perspective: perspective,
+                view: view,
+                model: [
+                    [1.0, 0.0, 0.0, 0.0],
+                    [0.0, 1.0, 0.0, 0.0],
+                    [0.0, 0.0, 1.0, 0.0],
+                    [self.chunk_x as f32 * 0.25 * CHUNK_SIZE as f32, self.chunk_y as f32 * 0.25 * CHUNK_SIZE as f32, self.chunk_z as f32 * 0.25 * CHUNK_SIZE as f32, 1.0f32],
+                ],
+                light: [1.0, 1.0, 1.0f32],
+            };
+            target
+                .draw(
+                    (
+                        unsafe { &SQUARE_MESH.as_ref().unwrap().vertices },
+                        mesh.per_instance().unwrap(),
+                    ),
+                    unsafe { &SQUARE_MESH.as_ref().unwrap().indices },
+                    program,
+                    &uniforms,
+                    params,
+                )
+                .unwrap();
+        }
     }
 
     pub fn chunk_x(&self) -> i32 {
